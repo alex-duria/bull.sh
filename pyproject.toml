@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bullsh"
+version = "0.1.0"
+description = "Agentic CLI for investment research"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Alexander Duria" }
+]
+keywords = ["investment", "research", "cli", "ai", "sec", "edgar"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "edgartools>=3.0.0",
+    "duckduckgo-search>=6.0.0",
+    "python-dotenv>=1.0.0",
+    "tomli>=2.0.0;python_version<'3.11'",
+    "tomli-w>=1.0.0",
+    "pydantic>=2.0.0",
+    "yfinance>=0.2.0",
+    "openpyxl>=3.1.0",
+    "prompt_toolkit>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "mypy>=1.8.0",
+    "ruff>=0.3.0",
+    "respx>=0.21.0",  # HTTP mocking for httpx
+]
+rag = [
+    "duckdb>=1.0.0",
+    "sentence-transformers>=3.0.0",
+]
+export = [
+    "reportlab>=4.0.0",
+    "python-docx>=1.0.0",
+]
+
+[project.scripts]
+bullsh = "bullsh.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/aduria/bullsh"
+Repository = "https://github.com/aduria/bullsh"
+Issues = "https://github.com/aduria/bullsh/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["bullsh"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"

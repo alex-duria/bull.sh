@@ -1,0 +1,22 @@
+# Core dependencies
+anthropic>=0.40.0
+typer>=0.12.0
+rich>=13.0.0
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+edgartools>=3.0.0
+duckduckgo-search>=6.0.0
+python-dotenv>=1.0.0
+tomli-w>=1.0.0
+pydantic>=2.0.0
+yfinance>=0.2.0
+openpyxl>=3.1.0
+prompt_toolkit>=3.0.0
+
+# Optional: RAG support (vector search for SEC filings)
+# duckdb>=1.0.0
+# sentence-transformers>=3.0.0
+
+# Optional: Export to PDF/DOCX
+# reportlab>=4.0.0
+# python-docx>=1.0.0
