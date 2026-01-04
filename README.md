@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="#what-is-bullsh">What is Bull.sh?</a> •
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
   <a href="#quick-start">Quick Start</a> •
@@ -23,7 +24,42 @@
 
 ---
 
-**bullsh** is an AI-powered command-line tool that transforms investment research. Ask questions in natural language, and get comprehensive analysis synthesized from SEC filings, market data, analyst ratings, and social sentiment—all in your terminal.
+## What is Bull.sh?
+
+**Bull.sh** is an AI-powered investment research agent that lives in your terminal. It combines the reasoning capabilities of Claude with specialized financial data tools—SEC filings, market data, sentiment analysis—to deliver comprehensive research in seconds, not hours.
+
+<p align="center">
+  <a href="https://github.com/aduria/bullsh/raw/main/static/bullsh-demo.mp4">
+    <img src="static/bullsh-banner.png" alt="Watch Demo" width="600"/>
+    <br/>
+  </a>
+</p>
+
+### Why Not Just Use ChatGPT or Claude Directly?
+
+Great question. Here's what Bull.sh gives you that copy-pasting into a chat window doesn't:
+
+| Limitation of ChatGPT/Claude | Bull.sh Solution |
+|------------------------------|------------------|
+| **Can't access SEC filings** | Direct EDGAR integration pulls 10-K, 10-Q, 8-K filings automatically. These are 100+ pages long |
+| **Knowledge cutoff** | Always fetches current data—earnings from last week, not last year |
+| **Can't remember your research** | Session persistence lets you save, resume, and search past analyses |
+| **No structured output** | Export to Excel financial models, PDF reports, Word documents |
+| **Manual copy-paste workflow** | One command researches, analyzes, and formats everything |
+
+**Additional advantages:**
+
+- **🔍 RAG-Powered Deep Dives** — SEC filings are chunked and indexed in a local vector database. Ask "What did the CFO say about margins?" and get answers from the actual 10-K, not hallucinated summaries.
+
+- **⚡ Parallel Research** — Comparing NVIDIA vs AMD vs Intel? Bull.sh spawns parallel research agents, gathering data simultaneously instead of sequentially.
+
+- **💰 Cost Optimized** — Prompt caching reduces API costs by up to 90% on repeat queries. Built-in token tracking shows exactly what you're spending.
+
+- **🔒 Your Data Stays Yours** — Research runs locally. Your investment theses aren't training someone else's model.
+
+- **🎯 Reproducible Workflow** — Run the same Piotroski analysis on any stock with one command. Consistent methodology, every time.
+
+---
 
 ## Features
 
