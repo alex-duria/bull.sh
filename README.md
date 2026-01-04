@@ -29,10 +29,7 @@
 **Bull.sh** is an AI-powered investment research agent that lives in your terminal. It combines the reasoning capabilities of Claude with specialized financial data tools—SEC filings, market data, sentiment analysis—to deliver comprehensive research in seconds, not hours.
 
 <p align="center">
-  <a href="https://github.com/aduria/bullsh/raw/main/static/bullsh-demo.mp4">
-    <img src="static/bullsh-banner.png" alt="Watch Demo" width="600"/>
-    <br/>
-  </a>
+  <img src="static/bullsh-demo.gif" alt="Bull.sh Demo" width="100%"/>
 </p>
 
 ### Why Not Just Use ChatGPT or Claude Directly?
