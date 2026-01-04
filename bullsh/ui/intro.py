@@ -296,19 +296,20 @@ def render_intro_frame(
     output = Text()
     progress = frame / total_frames
 
-    # Phase 1: Chart builds up (0-50%)
-    # Phase 2: Chart scrolls/animates (50-75%)
-    # Phase 3: Fade to logo (75-100%)
+    # Phase 1: Chart builds up (0-45%)
+    # Phase 2: Chart scrolls/animates (45-65%)
+    # Phase 3: Logo appears (65-100%) - clean cut, no grey fade
 
-    if progress < 0.75:
+    # Chart phase (0-65%)
+    if progress < 0.65:
         # Calculate how many candles to show
-        chart_progress = min(1.0, progress / 0.5)
+        chart_progress = min(1.0, progress / 0.4)
         total_candles = len(data["candles"])
         visible_count = max(3, int(total_candles * chart_progress))
 
         # Scrolling effect after initial build
-        if progress > 0.5:
-            scroll_progress = (progress - 0.5) / 0.25
+        if progress > 0.45:
+            scroll_progress = (progress - 0.45) / 0.2
             offset = int(scroll_progress * (total_candles - visible_count))
         else:
             offset = 0
@@ -322,16 +323,16 @@ def render_intro_frame(
             height=height - 2,
             visible_candles=min(visible_count, width // 2),
             offset=offset,
-            show_volume=progress > 0.2,
-            show_grid=progress > 0.1,
-            show_price_axis=progress > 0.15,
+            show_volume=progress > 0.15,
+            show_grid=progress > 0.08,
+            show_price_axis=progress > 0.12,
             show_ticker=progress > 0.05,
             glow_intensity=glow,
         )
         output.append(chart)
 
         # Bottom bar with animated elements
-        if progress > 0.3:
+        if progress > 0.25:
             bar = Text()
             bar.append("  ")
 
@@ -352,59 +353,157 @@ def render_intro_frame(
 
             output.append(bar)
 
-    # Transition to logo
-    if progress > 0.7:
-        fade_progress = (progress - 0.7) / 0.3
+    # Logo phase (65-100%) - clean cut transition
+    else:
+        logo_progress = (progress - 0.65) / 0.35
 
-        if fade_progress > 0.3:
-            output = Text()
-            output.append("\n" * (height // 4))
+        # Vertical centering
+        output.append("\n" * (height // 4))
 
-            logo = render_logo("large" if width > 80 else "small")
-            # Center each line of logo
-            for line in str(logo).split("\n"):
-                padding = " " * max(0, (width - len(line)) // 2)
-                output.append(padding)
-                for char in line:
-                    if char in "█▀▄╔╗╚╝║═":
-                        output.append(char, style=f"bold {THEME['primary']}")
-                    else:
-                        output.append(char)
-                output.append("\n")
-
+        # Logo always shows once we're in this phase
+        logo = render_logo("large" if width > 80 else "small")
+        for line in str(logo).split("\n"):
+            padding = " " * max(0, (width - len(line)) // 2)
+            output.append(padding)
+            for char in line:
+                if char in "█▀▄╔╗╚╝║═":
+                    output.append(char, style=f"bold {THEME['primary']}")
+                else:
+                    output.append(char)
             output.append("\n")
 
-            if fade_progress > 0.5:
-                # Tagline
-                padding = " " * max(0, (width - len(TAGLINE)) // 2)
-                output.append(padding)
-                output.append(TAGLINE, style=f"italic {THEME['secondary']}")
-                output.append("\n")
+        output.append("\n")
 
-            if fade_progress > 0.6:
-                # Subtitle
-                padding = " " * max(0, (width - len(SUBTITLE)) // 2)
-                output.append(padding)
-                output.append(SUBTITLE, style=f"dim")
-                output.append("\n")
+        # Tagline (appears at 20% of logo phase)
+        if logo_progress > 0.2:
+            padding = " " * max(0, (width - len(TAGLINE)) // 2)
+            output.append(padding)
+            output.append(TAGLINE, style=f"italic {THEME['secondary']}")
+            output.append("\n")
 
-            if fade_progress > 0.7:
-                # Separator
-                sep = "─" * 40
-                padding = " " * max(0, (width - 40) // 2)
-                output.append(padding)
-                output.append(sep, style=THEME["muted"])
-                output.append("\n")
+        # Subtitle (appears at 40%)
+        if logo_progress > 0.4:
+            padding = " " * max(0, (width - len(SUBTITLE)) // 2)
+            output.append(padding)
+            output.append(SUBTITLE, style="dim")
+            output.append("\n")
 
-            if fade_progress > 0.8:
-                # Credit
-                credit_text = f"Made with ❤  by Alexander Duria"
-                padding = " " * max(0, (width - len(credit_text)) // 2)
-                output.append(padding)
-                output.append("Made with ", style=f"dim")
-                output.append("❤", style=THEME["bearish"])
-                output.append("  by Alexander Duria", style=f"dim")
-                output.append("\n")
+        # Separator (appears at 55%)
+        if logo_progress > 0.55:
+            sep = "─" * 40
+            padding = " " * max(0, (width - 40) // 2)
+            output.append(padding)
+            output.append(sep, style=THEME["muted"])
+            output.append("\n")
+
+        # Credit (appears at 70%)
+        if logo_progress > 0.70:
+            credit_text = "Made with ❤  by Alexander Duria"
+            padding = " " * max(0, (width - len(credit_text)) // 2)
+            output.append(padding)
+            output.append("Made with ", style="dim")
+            output.append("❤", style=THEME["bearish"])
+            output.append("  by Alexander Duria", style="dim")
+            output.append("\n")
+
+    return output
+
+
+def render_final_welcome(width: int, height: int) -> Text:
+    """
+    Render the final welcome screen that matches _show_welcome() from repl.py.
+
+    This ensures a smooth transition from animation to interactive state.
+    """
+    output = Text()
+
+    # Calculate padding to vertically center content
+    content_height = 20  # Approximate height of welcome content
+    top_padding = max(0, (height - content_height) // 3)
+    output.append("\n" * top_padding)
+
+    # Logo
+    logo = render_logo("large" if width > 80 else "small")
+    for line in str(logo).split("\n"):
+        padding = " " * max(0, (width - len(line)) // 2)
+        output.append(padding)
+        for char in line:
+            if char in "█▀▄╔╗╚╝║═":
+                output.append(char, style=f"bold {THEME['primary']}")
+            else:
+                output.append(char)
+        output.append("\n")
+
+    output.append("\n")
+
+    # Tagline
+    padding = " " * max(0, (width - len(TAGLINE)) // 2)
+    output.append(padding)
+    output.append(TAGLINE, style=f"italic {THEME['secondary']}")
+    output.append("\n")
+
+    # Subtitle
+    subtitle = "SEC filings • Market data • AI analysis"
+    padding = " " * max(0, (width - len(subtitle)) // 2)
+    output.append(padding)
+    output.append(subtitle, style="dim")
+    output.append("\n")
+
+    # Separator
+    sep = "─" * 40
+    padding = " " * max(0, (width - 40) // 2)
+    output.append(padding)
+    output.append(sep, style=THEME["muted"])
+    output.append("\n")
+
+    # Credit
+    credit_text = "Made with ❤  by Alexander Duria"
+    padding = " " * max(0, (width - len(credit_text)) // 2)
+    output.append(padding)
+    output.append("Made with ", style="dim")
+    output.append("❤", style=THEME["bearish"])
+    output.append("  by Alexander Duria", style="dim")
+    output.append("\n\n")
+
+    # Quick start hints (matching _show_welcome in repl.py)
+    hints = [
+        "",
+        "Quick Start:",
+        "  research TICKER    Research a company      e.g. research NVDA",
+        "  compare T1 T2      Compare companies       e.g. compare AAPL MSFT",
+        "  /framework NAME   Use analysis framework  piotroski, porter, valuation",
+        "",
+        "Tab for suggestions • /help for all commands • Ctrl+C to exit",
+        "",
+    ]
+
+    for hint in hints:
+        if hint.startswith("Quick Start"):
+            output.append(hint, style="bold")
+        elif hint.startswith("  research") or hint.startswith("  compare") or hint.startswith("  /framework"):
+            # Parse and color the hint
+            parts = hint.split("    ")
+            if len(parts) >= 2:
+                output.append(f"  {parts[0].strip()}", style="cyan")
+                output.append("    ")
+                rest = "    ".join(parts[1:])
+                if "e.g." in rest:
+                    desc, example = rest.split("e.g.")
+                    output.append(desc.strip(), style="white")
+                    output.append("  e.g. ", style="dim")
+                    output.append(example.strip(), style="dim")
+                else:
+                    output.append(rest.strip(), style="white")
+            else:
+                output.append(hint)
+        elif hint.startswith("Tab for"):
+            output.append(hint, style="dim")
+        else:
+            output.append(hint)
+        output.append("\n")
+
+    # Ready indicator
+    output.append(f"✓ Ready\n", style=f"bold {THEME['primary']}")
 
     return output
 
@@ -412,14 +511,24 @@ def render_intro_frame(
 async def play_intro_animation(
     duration: float = 4.0,
     skip_callback: Callable[[], bool] | None = None,
-) -> None:
+) -> bool:
     """
     Play the epic animated intro sequence.
 
     Args:
         duration: Total animation duration in seconds
         skip_callback: Optional callback that returns True to skip animation
+
+    Returns:
+        True if animation completed (welcome screen is displayed)
     """
+    import sys
+    import os
+
+    # Enable ANSI escape codes on Windows
+    if sys.platform == "win32":
+        os.system("")  # Enables ANSI escape sequences in Windows terminal
+
     # Get terminal size
     term_width = console.width or 80
     term_height = console.height or 24
@@ -427,21 +536,31 @@ async def play_intro_animation(
     # Generate market data
     data = generate_market_data(num_candles=80, volatility=0.03)
 
-    # Animation parameters
-    fps = 24
+    # Animation parameters - lower FPS for recording-friendly animation
+    fps = 12
     total_frames = int(duration * fps)
     frame_delay = 1.0 / fps
 
-    # Clear screen
-    console.clear()
+    # ANSI escape codes for flicker-free rendering
+    CURSOR_HOME = "\033[H"      # Move cursor to top-left
+    CLEAR_SCREEN = "\033[2J"    # Clear entire screen
+    HIDE_CURSOR = "\033[?25l"   # Hide cursor
+    SHOW_CURSOR = "\033[?25h"   # Show cursor
 
-    with Live(console=console, refresh_per_second=fps, transient=True, screen=True) as live:
+    skipped = False
+
+    # Clear screen and hide cursor for clean animation
+    sys.stdout.write(CLEAR_SCREEN + CURSOR_HOME + HIDE_CURSOR)
+    sys.stdout.flush()
+
+    try:
         for frame in range(total_frames):
             # Check for skip
             if skip_callback and skip_callback():
+                skipped = True
                 break
 
-            # Render frame
+            # Render frame to string
             content = render_intro_frame(
                 data,
                 frame,
@@ -450,12 +569,59 @@ async def play_intro_animation(
                 term_height,
             )
 
-            live.update(content)
+            # Move cursor home and overwrite (no clear = no flicker)
+            sys.stdout.write(CURSOR_HOME)
+
+            # Render frame content line by line with padding
+            lines = []
+            with console.capture() as capture:
+                console.print(content, end="")
+            rendered = capture.get()
+
+            # Pad each line to full width to overwrite previous content
+            for line in rendered.split("\n"):
+                # Strip ANSI codes to get true length, then pad
+                padded = line + " " * max(0, term_width - len(line.encode('utf-8').decode('utf-8')))
+                lines.append(padded)
+
+            # Ensure we fill the screen height
+            while len(lines) < term_height:
+                lines.append(" " * term_width)
+
+            sys.stdout.write("\n".join(lines[:term_height]))
+            sys.stdout.flush()
+
             await asyncio.sleep(frame_delay)
 
-    # Brief pause on final frame
-    await asyncio.sleep(0.3)
-    console.clear()
+        # Render final welcome state if not skipped
+        if not skipped:
+            await asyncio.sleep(0.1)
+            final_content = render_final_welcome(term_width, term_height)
+
+            sys.stdout.write(CURSOR_HOME)
+
+            with console.capture() as capture:
+                console.print(final_content, end="")
+            rendered = capture.get()
+
+            lines = []
+            for line in rendered.split("\n"):
+                padded = line + " " * max(0, term_width - len(line))
+                lines.append(padded)
+            while len(lines) < term_height:
+                lines.append(" " * term_width)
+
+            sys.stdout.write("\n".join(lines[:term_height]))
+            sys.stdout.flush()
+
+            await asyncio.sleep(0.1)
+
+    finally:
+        # Always show cursor again
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.flush()
+
+    return not skipped
 
 
 def show_static_banner(compact: bool = False) -> None:
@@ -511,6 +677,8 @@ if __name__ == "__main__":
         show_static_banner()
         show_ready_prompt()
     else:
-        asyncio.run(play_intro_animation(duration=4.0))
-        show_static_banner(compact=True)
-        show_ready_prompt()
+        # Animation now shows final welcome, no need to show static banner after
+        showed_welcome = asyncio.run(play_intro_animation(duration=4.0))
+        if not showed_welcome:
+            show_static_banner(compact=True)
+            show_ready_prompt()

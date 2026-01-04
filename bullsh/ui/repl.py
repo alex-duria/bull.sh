@@ -227,26 +227,34 @@ async def _async_repl(config: Config, framework: str | None = None, skip_intro: 
     session = session_manager.create(framework=framework)
 
     # Play animated intro (unless skipped)
+    # If animation completes, it already shows the welcome screen
+    intro_showed_welcome = False
     if not skip_intro:
-        await _play_intro()
+        intro_showed_welcome = await _play_intro()
 
-    # Show welcome banner
-    _show_welcome(framework)
+    # Only show welcome banner if intro didn't already show it
+    if not intro_showed_welcome:
+        _show_welcome(framework)
 
     await _repl_loop(config, orchestrator, session, framework)
 
 
-async def _play_intro(skip: bool = False) -> None:
-    """Play the animated intro sequence."""
+async def _play_intro(skip: bool = False) -> bool:
+    """
+    Play the animated intro sequence.
+
+    Returns:
+        True if animation completed and showed welcome screen
+    """
     if skip:
-        return
+        return False
 
     try:
         from bullsh.ui.intro import play_intro_animation
-        await play_intro_animation(duration=4.0)
+        return await play_intro_animation(duration=4.0)
     except Exception:
         # Fallback if animation fails
-        pass
+        return False
 
 
 def _show_welcome(framework: str | None = None, compact: bool = False) -> None:
