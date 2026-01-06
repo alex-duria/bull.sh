@@ -93,6 +93,9 @@ class Orchestrator:
     history: list[AgentMessage] = field(default_factory=list)
     _client: Anthropic | None = field(default=None, repr=False)
 
+    # Session for artifact tracking (optional, set by REPL)
+    session: Any = field(default=None, repr=False)
+
     # Token tracking
     session_usage: TokenUsage = field(default_factory=TokenUsage)
     turn_usage: TokenUsage = field(default_factory=TokenUsage)
@@ -112,11 +115,18 @@ class Orchestrator:
         self,
         user_message: str,
         framework: str | None = None,
+        system_override: str | None = None,
     ) -> AsyncIterator[str]:
         """
         Process a user message and yield response chunks.
 
         This is the main entry point for the REPL.
+
+        Args:
+            user_message: The user's message
+            framework: Optional framework name for guided analysis
+            system_override: Optional complete system prompt override
+                             (bypasses normal system prompt building)
         """
         # Reset per-turn tracking
         self.turn_usage = TokenUsage()
@@ -134,15 +144,20 @@ class Orchestrator:
         self.history.append(AgentMessage(role="user", content=user_message))
 
         # Check for comparison request - dispatch to parallel subagent
-        comparison_tickers = self._detect_comparison(user_message)
-        if comparison_tickers and len(comparison_tickers) >= 2:
-            log("orchestrator", f"Detected comparison request for {comparison_tickers}")
-            async for chunk in self._run_comparison(user_message, comparison_tickers):
-                yield chunk
-            return
+        # (Skip if using system_override - factor session handles its own flow)
+        if not system_override:
+            comparison_tickers = self._detect_comparison(user_message)
+            if comparison_tickers and len(comparison_tickers) >= 2:
+                log("orchestrator", f"Detected comparison request for {comparison_tickers}")
+                async for chunk in self._run_comparison(user_message, comparison_tickers):
+                    yield chunk
+                return
 
-        # Build system prompt
-        system_prompt = self._build_system_prompt(framework)
+        # Build system prompt (or use override)
+        if system_override:
+            system_prompt = system_override
+        else:
+            system_prompt = self._build_system_prompt(framework)
 
         # Convert history to Claude format
         messages = self._history_to_messages()
@@ -277,6 +292,13 @@ class Orchestrator:
                             result.error_message,
                         ) + "\n"
 
+                        # Capture artifact if this tool generated a file
+                        if self.session is not None:
+                            from bullsh.storage.artifacts import extract_artifact_from_result
+                            artifact = extract_artifact_from_result(result, self.session)
+                            if artifact:
+                                log("orchestrator", f"Registered artifact: {artifact.filename}")
+
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block.id,
@@ -401,6 +423,19 @@ class Orchestrator:
                     params["content"],
                     params.get("filename"),
                 )
+            case "calculate_factors":
+                from bullsh.tools import factors as factors_tool
+                return await factors_tool.calculate_factors(
+                    params["ticker"],
+                    params.get("peers", []),
+                    params.get("factors"),
+                )
+            case "run_factor_regression":
+                from bullsh.tools import factors as factors_tool
+                return await factors_tool.run_factor_regression_tool(
+                    params["ticker"],
+                    params.get("window_months", 36),
+                )
             case _:
                 return ToolResult(
                     data={},
@@ -425,7 +460,25 @@ You have access to these tools:
 - search_news: Search recent financial news
 - web_search: **IMPORTANT** General web search - use this to fill gaps when other tools fail or data is outdated
 - compute_ratios: Calculate key financial ratios (P/E, EV/EBITDA, growth rates)
+- calculate_factors: **REQUIRED for factor analysis** Compute real factor z-scores (value, momentum, quality, growth, size, volatility)
+- run_factor_regression: Run Fama-French regression to decompose returns into factor exposures
 - save_thesis: Save research to a thesis document
+
+**RAG SEARCH - USE THIS FIRST FOR FILING QUESTIONS:**
+When users ask questions about content in SEC filings (risks, revenue, strategy, competition, etc.):
+1. ALWAYS use rag_search FIRST - this searches the indexed 10-K and 10-Q filings
+2. Use SEC section names for better results: "Item 1A Risk Factors", "Item 7 MD&A", "Item 1 Business"
+3. If results aren't relevant, VARY YOUR QUERIES - this is RAG, try different terms:
+   - "risk factors" → "principal risks" → "Item 1A"
+   - "revenue growth" → "net sales increase" → "total revenue year over year"
+   - "competition" → "competitive landscape" → "market position"
+4. Do NOT use web_search for information that's in the filings - it's already indexed!
+5. web_search is for CURRENT data (stock price, news, analyst estimates) NOT filing content
+
+**FACTOR ANALYSIS GUARDRAIL:**
+When users ask about factor exposures, factor tilts, or multi-factor analysis, you MUST call calculate_factors.
+Do NOT theorize about factors or describe them conceptually - compute the actual z-scores.
+The tool does pure Python math and returns real numbers. Always use it.
 
 **EFFICIENT TOOL USAGE:**
 - Make MULTIPLE tool calls in parallel when possible to gather data faster
@@ -435,15 +488,14 @@ You have access to these tools:
 
 When researching a company:
 1. PARALLEL: scrape_yahoo + sec_search + search_stocktwits (get market data, filings list, and sentiment together)
-2. THEN: sec_fetch for the most recent 10-K or 10-Q
-3. THEN: rag_search for specific questions about the filing
+2. THEN: sec_fetch for the most recent 10-K or 10-Q (this auto-indexes for RAG)
+3. THEN: rag_search for specific questions about the filing content
 4. FINALLY: Synthesize findings into analysis - don't keep calling tools
 
 **CRITICAL: Filling Data Gaps**
-- If scrape_yahoo fails or returns incomplete data, use web_search to find current stock price and market data
-- If social tools fail, use web_search to find investor sentiment
-- When data seems outdated, use web_search with specific queries
-- Try web_search as a fallback when tools fail
+- Use web_search for CURRENT data: stock prices, recent news, analyst estimates
+- Do NOT use web_search for filing content - use rag_search instead
+- If rag_search returns no results, check if the filing is indexed with rag_list first
 
 **CRITICAL: ALWAYS COMPLETE YOUR RESPONSE**
 - Every response MUST end with analysis and conclusions, not just tool calls
@@ -582,6 +634,14 @@ END WITH: Clear verdict (Undervalued/Fairly Valued/Overvalued) and key assumptio
 - /export thesis.pdf - Save as PDF
 - /export report.docx - Save as Word document
 - /excel - Generate Excel spreadsheet with data"""
+
+        # Inject artifacts section if session has artifacts
+        if self.session is not None:
+            from bullsh.storage.artifacts import ArtifactRegistry
+            registry = ArtifactRegistry(self.session)
+            artifacts_section = registry.to_prompt_section()
+            if artifacts_section:
+                base_prompt += f"\n\n{artifacts_section}"
 
         return base_prompt
 

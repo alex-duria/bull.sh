@@ -42,6 +42,8 @@ DEFAULT_TTL: dict[str, int | None] = {
     "stocktwits": 1,    # StockTwits - 1 hour (sentiment is time-sensitive)
     "reddit": 2,        # Reddit - 2 hours
     "news": 4,          # News - 4 hours
+    "price_history": 24,    # Price history - 1 day (EOD refresh)
+    "fama_french": 24 * 7,  # Fama-French factors - 7 days (monthly updates)
     "default": 12,      # Default - 12 hours
 }
 

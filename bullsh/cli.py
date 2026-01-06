@@ -212,6 +212,9 @@ def research(
     session_manager = get_session_manager()
     session = session_manager.create(tickers=[ticker], framework=framework)
 
+    # Wire session for artifact tracking
+    orchestrator.session = session
+
     # Run initial research query
     initial_prompt = f"Research {ticker} for me."
     if framework == "piotroski":
@@ -308,6 +311,9 @@ def compare(
     session_manager = get_session_manager()
     session = session_manager.create(tickers=tickers_upper, framework=framework)
 
+    # Wire session for artifact tracking
+    orchestrator.session = session
+
     # Build comparison prompt
     ticker_list = ", ".join(tickers_upper)
     initial_prompt = f"Compare {ticker_list} for me. For each company, gather key financial data and analyst sentiment, then provide a side-by-side comparison highlighting:\n1. Valuation metrics (P/E, EV/EBITDA)\n2. Growth rates\n3. Financial health\n4. Analyst sentiment\n5. Key risks\n\nConclude with which company appears most attractive and why."
@@ -389,6 +395,9 @@ def thesis(
     orchestrator = Orchestrator(config, verbose=verbose)
     session_manager = get_session_manager()
     session = session_manager.create(tickers=[ticker], framework="pitch")
+
+    # Wire session for artifact tracking
+    orchestrator.session = session
 
     # Build thesis prompt
     initial_prompt = f"""Generate a complete investment thesis for {ticker} in the Hedge Fund Stock Pitch format.
@@ -602,6 +611,9 @@ def resume(
     for msg in session.messages:
         from bullsh.agent.orchestrator import AgentMessage
         orchestrator.history.append(AgentMessage(role=msg.role, content=msg.content))
+
+    # Wire session for artifact tracking
+    orchestrator.session = session
 
     # Enter REPL
     from bullsh.ui.repl import run_repl_with_session

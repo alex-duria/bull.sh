@@ -4,6 +4,205 @@ All notable changes to bullsh will be documented in this file. Written in plain 
 
 ---
 
+## 2026-01-06 - Factor Model Bug Fixes: Excel Tabs Now Populated
+
+**Developer**: Alexander Duria
+
+### Fixed
+
+- **Historical Exposures tab empty**: Added `run_rolling_regression` call in REPL Stage 6 to compute rolling 36-month factor betas. Rolling betas are now stored in `cached_data["rolling_betas"]` and passed to Excel generation.
+
+- **Risk Decomposition pie chart empty**: Fixed variance decomposition in REPL - was using fake approximation instead of real Fama-French regression. Now properly calls `calculate_variance_decomposition` with real regression results and factor variances.
+
+- **Factor Exposures tab blank columns**: Updated `_create_factor_exposures` to display component-level data (P/E, P/B, ROE, etc.) with actual values, peer medians, and component z-scores. Added color-coded formatting for z-scores.
+
+- **`FactorScore.raw_value` AttributeError**: Fixed in `tools/factors.py` - `FactorScore` has `components` dict, not `raw_value`.
+
+- **`prepare_fama_french_data` wrong signature**: Fixed to pass both `ff_data` and `stock_history` arguments.
+
+- **`run_factor_regression` wrong signature**: Fixed to use correct parameters `(stock_returns, factor_returns, rf_returns)`.
+
+- **`RegressionResult` treated as dict**: Function returns dataclass or None, not a dict. Fixed null checks and attribute access.
+
+- **`calculate_variance_decomposition` wrong argument**: Was passing DataFrame, now passes `dict[str, float]` of factor variances.
+
+### Added
+
+- **Rolling regression in REPL**: Stage 6 now computes rolling 36-month factor betas for historical exposure chart
+- **Full profiles in cached_data**: Store complete `FactorProfile` objects for Excel component display
+- **Metric name formatting**: Added `_format_metric_name()` for readable component names in Excel
+- **Line chart for rolling betas**: Historical Exposures tab now shows time-varying factor exposures with chart
+- **Summary statistics for rolling betas**: Mean, min, max, std dev for each factor's historical beta
+
+### Files Modified
+
+- `bullsh/ui/repl.py` - Added rolling regression call, store profiles in cached_data, added import for `run_rolling_regression`
+- `bullsh/factors/excel_factors.py` - Enhanced `_create_factor_exposures` with component data, enhanced `_create_historical_exposures` with rolling beta chart and summary stats
+- `bullsh/tools/factors.py` - Fixed FactorScore attribute access and regression call signatures
+
+---
+
+## 2026-01-05 - RAG Improvements: Full Indexing + Query Priority
+
+**Developer**: Alexander Duria
+
+### Fixed
+
+- **Critical RAG Bug**: RAG was only indexing the **truncated** portion of SEC filings (first ~50k chars), missing Risk Factors, MD&A, and other important sections that appear later in filings.
+
+- **Agent ignoring RAG**: Agent was defaulting to web_search for filing content instead of using indexed filings. Updated system prompt and tool descriptions to make RAG the primary tool for filing questions.
+
+### Changed (RAG Priority)
+
+- **System Prompt**: Added prominent "RAG SEARCH - USE THIS FIRST FOR FILING QUESTIONS" section
+- **Query Variation Guidance**: Agent now knows to vary queries for better RAG results
+- **SEC Section Names**: Agent instructed to use "Item 1A Risk Factors", "Item 7 MD&A" for targeted search
+- **rag_search Tool Description**: Now marked as "PRIMARY tool for questions about SEC filing content"
+- **web_search Clarified**: Explicitly stated as for CURRENT data only, not filing content
+
+### Inspired By
+
+- [tenk](https://github.com/ralliesai/tenk) RAG architecture - semantic retrieval with query variation
+
+### Changed (Full Text Indexing)
+
+- `sec_fetch` now stores `full_text` temporarily for RAG indexing
+- `_auto_index_for_rag` uses `full_text` instead of truncated `text`
+- `full_text` is stripped before returning to agent (don't bloat context)
+- `full_text` is not cached (would bloat disk cache)
+
+### Impact
+
+- Previously indexed filings will NOT be re-indexed automatically
+- To fix existing indexes: run `/rag clear` then re-fetch filings
+- New filings will be fully indexed (all sections searchable)
+
+### Files Modified
+
+- `bullsh/tools/sec.py` - Store full_text for RAG, strip before return
+- `bullsh/tools/base.py` - Enhanced rag_search tool description with query tips
+- `bullsh/agent/orchestrator.py` - RAG-first system prompt guidance
+
+---
+
+## 2026-01-05 - Factor Guardrails + Artifact Registry
+
+**Developer**: Alexander Duria
+
+### Added
+
+- **Artifact Registry** (`bullsh/storage/artifacts.py`):
+  - Tracks generated files (Excel, thesis) in Session.metadata
+  - Injects artifact list into system prompt so agent remembers what it created
+  - Solves "agent forgot it already generated a file" problem
+  - Auto-captures artifacts from tool results (generate_excel, save_thesis)
+
+- **Factor Calculation Tools** for freestyle research:
+  - `calculate_factors` tool: Computes real z-scores (value, momentum, quality, growth, size, volatility)
+  - `run_factor_regression` tool: Runs Fama-French regression for return decomposition
+  - Forces agent to compute actual numbers instead of theorizing about factors
+
+- **Tool Executor** (`bullsh/tools/factors.py`):
+  - Wraps pure Python factor calculations as agent-callable tools
+  - Returns structured data with z-scores, percentiles, interpretations
+  - Includes peer comparison and composite scoring
+
+### Changed
+
+- **System Prompt** (`agent/orchestrator.py`):
+  - Added factor tools to tool list
+  - Added explicit guardrail: "When users ask about factor exposures, you MUST call calculate_factors"
+  - Prevents agent from describing factors conceptually without computing them
+
+### Problems Solved
+
+1. **Agent skipping factor calculations**: Was walking through theoretical framework without computing real exposures. Now forced to call the tool which executes pure Python math.
+
+2. **Agent forgetting generated files**: When user asked to "update the Excel file", agent had no context that it had already generated one. Now artifacts are tracked in Session.metadata and injected into system prompt:
+   ```
+   **SESSION ARTIFACTS:**
+   You have generated these files in this session:
+   - EXCEL: NVDA_financial_model_20260105.xlsx (Key Metrics, Ratios, Comparison)
+     Tickers: NVDA
+     Path: C:/Users/.../exports/NVDA_financial_model_20260105.xlsx
+   ```
+
+### Files Created
+
+- `bullsh/tools/factors.py` - Tool executor for factor calculations
+- `bullsh/storage/artifacts.py` - Artifact registry for tracking generated files
+
+### Files Modified
+
+- `bullsh/tools/base.py` - Added `CALCULATE_FACTORS_TOOL` and `RUN_FACTOR_REGRESSION_TOOL` definitions
+- `bullsh/agent/orchestrator.py` - Added tool handlers, system prompt guardrails, artifact capture, session wiring
+- `bullsh/frameworks/base.py` - Registered `factors` in `BUILTIN_FRAMEWORKS`
+- `bullsh/ui/repl.py` - Wire session to orchestrator for artifact tracking
+- `bullsh/cli.py` - Wire session to orchestrator in research, compare, thesis, resume commands
+
+---
+
+## 2026-01-04 - Multi-Factor Stock Analysis Module
+
+**Developer**: Alexander Duria
+
+### Added
+
+- **Multi-Factor Analysis Framework** (`/framework factors`):
+  - Interactive 8-stage session with professor-guided education
+  - 6 core factors: Value, Momentum, Quality, Growth, Size, Volatility
+  - Cross-sectional z-score calculations with winsorization
+  - Fama-French factor regression with rolling 36-month betas
+  - Variance decomposition and correlation analysis
+  - 4 pre-built scenarios (Rate Shock, Risk-Off, Recession, Cyclical Rotation)
+  - Custom scenario builder with guided inputs
+  - 9-tab Excel workbook generation
+
+- **New Module: `bullsh/factors/`**:
+  - `calculator.py` - Pure Python factor math (zero Claude API tokens)
+  - `scenarios.py` - Pre-built and custom scenario calculations
+  - `fetcher.py` - Price history (yfinance) and Fama-French data fetchers
+  - `session.py` - 8-stage state machine with Session.metadata persistence
+  - `regression.py` - OLS regression for factor betas and variance decomposition
+  - `prompts.py` - Minimal professor persona prompts (~200 tokens each)
+  - `excel_factors.py` - 9-tab Excel workbook generation
+
+### Changed
+
+- **Cache TTLs** (`storage/cache.py`):
+  - Added `price_history: 24 hours` for historical price data
+  - Added `fama_french: 7 days` for factor return data
+
+- **REPL** (`ui/repl.py`):
+  - Added `/framework factors` command with panel description
+  - Updated help text and autocompletion
+
+### Design Philosophy
+
+- **Token Efficiency**: Factor calculations are pure Python - Claude only explains pre-computed results
+- **Expected token usage**: ~4,000 tokens per session (90% reduction vs naive approach)
+- **Memory Management**: Raw data stays in disk cache; only computed scores stored in state
+
+### Files Created
+
+- `bullsh/factors/__init__.py`
+- `bullsh/factors/calculator.py`
+- `bullsh/factors/scenarios.py`
+- `bullsh/factors/fetcher.py`
+- `bullsh/factors/session.py`
+- `bullsh/factors/regression.py`
+- `bullsh/factors/prompts.py`
+- `bullsh/factors/excel_factors.py`
+
+### Files Modified
+
+- `bullsh/storage/cache.py` - New TTL entries
+- `bullsh/ui/repl.py` - Framework integration + 500-line interactive session handler
+- `bullsh/agent/orchestrator.py` - Added `system_override` parameter to `chat()` method
+- `bullsh/frameworks/base.py` - Registered `factors` in `BUILTIN_FRAMEWORKS` so it appears in `frameworks list`
+
+---
+
 ## 2026-01-04 - Terminal UI Overhaul & Polish
 
 **Developer**: Alexander Duria

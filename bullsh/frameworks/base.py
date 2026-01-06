@@ -286,12 +286,24 @@ PITCH_FRAMEWORK = Framework(
 # Import valuation framework
 from bullsh.frameworks.valuation import VALUATION_FRAMEWORK
 
+# Multi-factor analysis framework (interactive session, handled separately in repl.py)
+FACTORS_FRAMEWORK = Framework(
+    name="factors",
+    display_name="Multi-Factor Analysis",
+    description="Cross-sectional factor scoring with Fama-French regression",
+    framework_type=FrameworkType.QUANTITATIVE,
+    scoring_enabled=False,  # Uses its own scoring system
+    author="builtin",
+    criteria=[],  # Interactive session, no predefined criteria
+)
+
 # Registry of built-in frameworks
 BUILTIN_FRAMEWORKS: dict[str, Framework] = {
     "piotroski": PIOTROSKI_FRAMEWORK,
     "porter": PORTER_FRAMEWORK,
     "pitch": PITCH_FRAMEWORK,
     "valuation": VALUATION_FRAMEWORK,
+    "factors": FACTORS_FRAMEWORK,
 }
 
 

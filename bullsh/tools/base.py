@@ -229,12 +229,21 @@ SAVE_THESIS_TOOL = ToolDefinition(
 
 RAG_SEARCH_TOOL = ToolDefinition(
     name="rag_search",
-    description="Semantic search over indexed SEC filings. Returns the most relevant text chunks matching your query. Use this to find specific information in large filings without reading the entire document. Filings are auto-indexed when fetched with sec_fetch.",
+    description="""PRIMARY tool for questions about SEC filing content. Searches indexed 10-K and 10-Q filings.
+
+ALWAYS use this FIRST when users ask about: risks, revenue, strategy, competition, management, segments, guidance, or any filing content.
+
+Query tips for better results:
+- Use SEC section names: "Item 1A Risk Factors", "Item 7 MD&A", "Item 1 Business"
+- If results aren't relevant, VARY YOUR QUERY - try synonyms and alternative phrases
+- Examples: "risk factors" → "principal risks", "revenue" → "net sales", "competition" → "competitive landscape"
+
+Do NOT use web_search for information in filings - it's already indexed here!""",
     parameters={
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Natural language search query (e.g., 'revenue growth drivers', 'competitive risks', 'debt obligations')",
+                "description": "Search query - use SEC section names like 'Item 1A Risk Factors' or vary terms for better results",
             },
             "ticker": {
                 "type": "string",
@@ -334,6 +343,76 @@ Best used after scrape_yahoo has been called for the ticker(s).""",
     },
 )
 
+CALCULATE_FACTORS_TOOL = ToolDefinition(
+    name="calculate_factors",
+    description="""Calculate multi-factor exposures for a stock using cross-sectional z-scores.
+
+IMPORTANT: You MUST call this tool when users ask about factor exposures, factor analysis, or factor tilts.
+Do NOT theorize about factors - always compute real z-scores using this tool.
+
+Computes z-scores for each factor by comparing the primary ticker against its peer group:
+- Value: P/E ratio, P/B ratio, EV/EBITDA (lower is better)
+- Momentum: 12-month return, 52-week high proximity (higher is better)
+- Quality: ROE, debt/equity inverse, earnings stability (higher is better)
+- Growth: Revenue growth, earnings growth (higher is better)
+- Size: Market cap (lower z-score = smaller cap)
+- Volatility: Realized vol, beta (lower is better)
+
+Returns factor z-scores, composite score, and peer comparison. Use this for any factor-based analysis.""",
+    parameters={
+        "properties": {
+            "ticker": {
+                "type": "string",
+                "description": "Primary stock ticker to analyze",
+            },
+            "peers": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "2-6 peer tickers for cross-sectional comparison",
+            },
+            "factors": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": ["value", "momentum", "quality", "growth", "size", "volatility"],
+                },
+                "description": "Factors to calculate (default: all)",
+            },
+        },
+        "required": ["ticker", "peers"],
+    },
+)
+
+RUN_FACTOR_REGRESSION_TOOL = ToolDefinition(
+    name="run_factor_regression",
+    description="""Run Fama-French factor regression to decompose stock returns.
+
+Performs OLS regression of stock excess returns against Fama-French factors:
+- Mkt-RF: Market risk premium
+- SMB: Small minus big (size factor)
+- HML: High minus low (value factor)
+- RF: Risk-free rate
+
+Returns factor betas, R-squared, alpha, and variance decomposition showing what percentage
+of the stock's risk comes from each factor. Requires 3+ years of price history.
+
+Use this for understanding systematic risk exposure and factor attribution.""",
+    parameters={
+        "properties": {
+            "ticker": {
+                "type": "string",
+                "description": "Stock ticker to analyze",
+            },
+            "window_months": {
+                "type": "integer",
+                "description": "Rolling window in months (default: 36)",
+                "default": 36,
+            },
+        },
+        "required": ["ticker"],
+    },
+)
+
 # All available tools
 ALL_TOOLS = [
     SEC_SEARCH_TOOL,
@@ -347,6 +426,8 @@ ALL_TOOLS = [
     WEB_SEARCH_TOOL,
     COMPUTE_RATIOS_TOOL,
     GENERATE_EXCEL_TOOL,
+    CALCULATE_FACTORS_TOOL,
+    RUN_FACTOR_REGRESSION_TOOL,
     SAVE_THESIS_TOOL,
 ]
 
