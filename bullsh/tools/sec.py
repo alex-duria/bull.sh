@@ -239,16 +239,22 @@ async def sec_fetch(
 
         # Cache successful results
         if result.status in (ToolStatus.SUCCESS, ToolStatus.PARTIAL):
+            # Don't cache full_text - it's huge and only needed for RAG indexing
+            cache_data = {k: v for k, v in result.data.items() if k != "full_text"}
             cache.set("sec", ticker, {
-                "data": result.data,
+                "data": cache_data,
                 "confidence": result.confidence,
                 "status": result.status.value,
                 "source_url": result.source_url,
             }, action="fetch", **cache_params)
 
-            # Auto-index into vector database for RAG
-            if _rag_enabled and "text" in result.data:
+            # Auto-index into vector database for RAG (uses full_text)
+            if _rag_enabled and ("full_text" in result.data or "text" in result.data):
                 await _auto_index_for_rag(result.data, ticker, filing_type)
+
+            # Strip full_text from result before returning to agent (already indexed, don't bloat context)
+            if "full_text" in result.data:
+                del result.data["full_text"]
 
         return result
     except Exception as e:
@@ -356,6 +362,7 @@ def _sec_fetch_sync(
             "accession_number": filing.accession_number,
             "url": filing_url,
             "text": _truncate(full_text, max_chars),
+            "full_text": full_text,  # Keep full text for RAG indexing
             "full_length": len(full_text),
         }
 
@@ -398,8 +405,10 @@ async def _auto_index_for_rag(data: dict[str, Any], ticker: str, filing_type: st
         filing_date = data.get("filing_date", "")
         year = int(filing_date[:4]) if filing_date and len(filing_date) >= 4 else 0
 
-        # Get full text (before truncation if available)
-        text = data.get("text", "")
+        # IMPORTANT: Use full_text for RAG indexing, not the truncated text
+        # The truncated text only includes the first N chars (for prompt context)
+        # but RAG needs the entire filing to find Risk Factors, MD&A, etc.
+        text = data.get("full_text") or data.get("text", "")
         if not text:
             return
 
