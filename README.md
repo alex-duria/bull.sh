@@ -70,6 +70,7 @@ Great question. Here's what Bull.sh gives you that copy-pasting into a chat wind
 | **Sentiment Analysis** | Social sentiment from StockTwits and Reddit discussions |
 | **News Search** | Recent financial news via DuckDuckGo |
 | **Web Search Fallback** | General web search when specialized sources lack data |
+| **Bull vs Bear Debates** | Adversarial multi-agent debates with conviction scoring |
 
 ### Analysis Frameworks
 
@@ -80,6 +81,33 @@ Great question. Here's what Bull.sh gives you that copy-pasting into a chat wind
 | **Valuation Analysis** | Quantitative | Multi-method price targets with bear/base/bull cases |
 | **Hedge Fund Pitch** | Output | Professional thesis format with catalysts and risks |
 | **Custom Frameworks** | User-defined | Create your own analysis frameworks via TOML |
+
+### Bull vs Bear Debates
+
+Spawn two AI agents that argue opposing investment theses, then synthesize into a balanced verdict:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🐂 BULL AGENT          vs          🐻 BEAR AGENT          │
+│  "Strong AI moat..."                "Valuation stretched..." │
+│                                                              │
+│                    ⚖️ MODERATOR                              │
+│              Conviction: 6/10 LEAN BULL                     │
+│         "Bull thesis breaks if margins compress..."          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Features:**
+- **Interactive pauses** between phases for user coaching
+- **Hint system** — guide agents with `bull: focus on margins` or `bear: mention delays`
+- **Stale data detection** — auto-supplements with web search if filings >1 year old
+- **Quick mode** (default) or **Deep mode** with 2 rebuttal rounds
+
+```bash
+bullsh debate NVDA              # Quick debate
+bullsh debate NVDA --deep       # Deep mode (2 rebuttals)
+/debate NVDA -f piotroski       # With framework context
+```
 
 ### Advanced Features
 
@@ -201,6 +229,10 @@ bullsh compare AMD NVDA INTC
 # Generate investment thesis
 bullsh thesis AAPL
 
+# Run bull vs bear debate
+bullsh debate NVDA
+bullsh debate NVDA --deep        # Deep mode with 2 rebuttal rounds
+
 # Use specific framework
 bullsh research NVDA --framework piotroski
 
@@ -221,6 +253,8 @@ bullsh --debug --debug-filter "tools,api"
 | `/research TICKER` | Start researching a company |
 | `/compare TICKER1 TICKER2 [TICKER3]` | Compare 2-3 companies side by side |
 | `/thesis [TICKER]` | Generate full investment thesis |
+| `/debate TICKER` | Run bull vs bear adversarial debate |
+| `/debate TICKER --deep` | Deep mode with 2 rebuttal rounds |
 
 #### Framework Commands
 
@@ -407,7 +441,11 @@ bull.sh/
 │   │   ├── orchestrator.py   # Main agent loop with tool dispatch
 │   │   ├── base.py           # SubAgent base class
 │   │   ├── research.py       # Single-company research agent
-│   │   └── compare.py        # Parallel comparison agent
+│   │   ├── compare.py        # Parallel comparison agent
+│   │   ├── debate.py         # Debate coordinator (4-phase orchestration)
+│   │   ├── bull.py           # Bull agent (argues optimistic thesis)
+│   │   ├── bear.py           # Bear agent (argues cautious thesis)
+│   │   └── moderator.py      # Moderator agent (synthesis + scoring)
 │   ├── tools/
 │   │   ├── base.py           # Tool definitions for Claude
 │   │   ├── sec.py            # SEC EDGAR integration
@@ -445,6 +483,8 @@ bullsh uses Claude's API. Estimated costs per research session:
 | Single company research | ~20K-50K | $0.10-0.25 |
 | Framework analysis | ~30K-80K | $0.15-0.40 |
 | Multi-company comparison | ~60K-150K | $0.30-0.75 |
+| Bull vs Bear debate (quick) | ~25K-35K | $0.12-0.18 |
+| Bull vs Bear debate (deep) | ~40K-50K | $0.20-0.25 |
 
 Token usage is displayed with `/cost` command. Prompt caching reduces repeat queries significantly.
 

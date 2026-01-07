@@ -4,6 +4,130 @@ All notable changes to bullsh will be documented in this file. Written in plain 
 
 ---
 
+## 2026-01-06 - Debate UX: Interactive Pauses + Fresh Data
+
+**Developer**: Alexander Duria
+
+### Added
+
+- **Interactive Turn-Based Debates**: Debate now pauses after each phase for user input
+  - 4 pause points: after Research, Opening Arguments, Rebuttals, and before Synthesis
+  - User can press Enter to continue or type hints to coach agents
+  - Prefix-based hint format: `bull: focus on margins` or `bear: mention robotaxi delays`
+  - Hints are queued and applied to the next phase
+
+- **Stale Data Detection + Web Search Supplement**:
+  - Detects when SEC filing data is older than 1 year
+  - Automatically fetches recent news via web search to supplement
+  - Fresh context injected into research summary for both agents
+  - Warning displayed: "⚠️ SEC filing data may be outdated (most recent: YYYY-MM-DD)"
+
+### UX Flow
+
+```
+Phase 1: Research
+  Gathering data for TSLA...
+  Research complete (33,738 tokens)
+  ⚠️ SEC filing data may be outdated (most recent: 2023-10-23)
+  Fetching recent news to supplement...
+  ✓ Fresh context added (1,234 chars)
+
+──────────────────────────────────────────────────
+Research complete. Press Enter to continue,
+or type hint (e.g., 'bear: mention robotaxi delays')
+> _
+
+Phase 2: Opening Arguments
+🐂 BULL CASE
+...
+🐻 BEAR CASE
+...
+
+──────────────────────────────────────────────────
+Opening Arguments complete. Press Enter to continue,
+or type hint (e.g., 'bear: mention robotaxi delays')
+> bear: hammer the valuation harder
+
+✓ Hint queued for bear
+
+Phase 3: Rebuttals
+...
+```
+
+### Files Modified
+
+- `bullsh/agent/debate.py` - Added pause markers, `_detect_stale_data()`, `_fetch_fresh_data()`, updated research summary
+- `bullsh/ui/repl.py` - Handle `<<PHASE_PAUSE:*>>` markers, prompt for hints, parse prefix format
+
+---
+
+## 2026-01-06 - Debate Agent Bug Fixes
+
+**Developer**: Alexander Duria
+
+### Fixed
+
+- **Agents trying to use tools during opening/rebuttal phases**: BullAgent and BearAgent were calling `_call_claude()` which passes tools to the API, causing agents to output "Let me gather research" instead of presenting arguments. Fixed by using direct `self.client.messages.create()` calls without the `tools` parameter for `run_opening()` and `run_rebuttal()` methods.
+
+- **SEC filing validation structure mismatch**: `debate.py` was checking `result.data.get("10-K")` but actual structure is `result.data.get("filings", {}).get("10-K")`. Fixed in `validate_ticker()` method.
+
+### Files Modified
+
+- `bullsh/agent/bull.py` - Direct API calls for opening/rebuttal (no tools)
+- `bullsh/agent/bear.py` - Direct API calls for opening/rebuttal (no tools)
+- `bullsh/agent/debate.py` - Fixed SEC filings nested structure check
+
+---
+
+## 2026-01-06 - Bull vs. Bear Agent Debate Feature
+
+**Developer**: Claude (AI)
+
+### Added
+
+- **Bull vs. Bear adversarial debate**: New feature that spawns two opposing agents - one arguing the bull case, one arguing the bear case. A moderator agent synthesizes their arguments into a balanced verdict.
+
+- **New agent classes**:
+  - `BullAgent` - Argues bullish thesis with 5 tool iterations, can concede valid points
+  - `BearAgent` - Argues bearish thesis with 5 tool iterations, can concede valid points
+  - `ModeratorAgent` - Synthesis-only agent (no tools), produces conviction score and thesis-breaker
+  - `DebateCoordinator` - Orchestrates 4-phase debate flow with state persistence
+
+- **CLI command**: `bullsh debate NVDA [--deep] [--framework piotroski]`
+  - Quick mode (default): 1 rebuttal round, ~25K tokens
+  - Deep mode: 2 rebuttal rounds, ~40K tokens
+  - Framework integration: Inject Piotroski/Porter context into debate
+
+- **REPL commands**:
+  - `/debate NVDA` - Run bull vs. bear debate
+  - `/debate NVDA --deep` - Deep mode with 2 rebuttal rounds
+  - `debate NVDA` - Also works as top-level command
+
+- **Debate flow**:
+  1. Research phase (parallel) - Both agents gather data
+  2. Opening arguments (parallel) - Each presents 3-5 strongest points
+  3. Rebuttals (sequential) - Direct-quote opponent's points, then counter
+  4. Synthesis - Moderator identifies contentions, scores conviction (1-10)
+
+- **Spec document**: Full feature specification at `specs/DEBATE_SPEC.md` with architecture, design decisions, and implementation phases
+
+### Files Created
+
+- `bullsh/agent/bull.py` - BullAgent class
+- `bullsh/agent/bear.py` - BearAgent class
+- `bullsh/agent/moderator.py` - ModeratorAgent and SynthesisResult classes
+- `bullsh/agent/debate.py` - DebateCoordinator, DebateState, DebatePhase, DebateRefused
+- `specs/DEBATE_SPEC.md` - Feature specification
+
+### Files Modified
+
+- `bullsh/agent/__init__.py` - Export new debate classes
+- `bullsh/cli.py` - Added `debate` command
+- `bullsh/ui/repl.py` - Added `/debate` slash command, `debate` top-level command, `_run_debate` function
+- `CLAUDE.md` - Updated architecture section (separate update)
+
+---
+
 ## 2026-01-06 - Factor Model Bug Fixes: Excel Tabs Now Populated
 
 **Developer**: Alexander Duria

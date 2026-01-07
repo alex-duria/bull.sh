@@ -4,6 +4,10 @@ from bullsh.agent.orchestrator import Orchestrator, TokenLimitExceeded, TokenUsa
 from bullsh.agent.base import SubAgent, AgentResult
 from bullsh.agent.research import ResearchAgent
 from bullsh.agent.compare import CompareAgent
+from bullsh.agent.bull import BullAgent
+from bullsh.agent.bear import BearAgent
+from bullsh.agent.moderator import ModeratorAgent, SynthesisResult
+from bullsh.agent.debate import DebateCoordinator, DebatePhase, DebateState, DebateRefused
 
 __all__ = [
     "Orchestrator",
@@ -13,4 +17,13 @@ __all__ = [
     "AgentResult",
     "ResearchAgent",
     "CompareAgent",
+    # Debate agents
+    "BullAgent",
+    "BearAgent",
+    "ModeratorAgent",
+    "SynthesisResult",
+    "DebateCoordinator",
+    "DebatePhase",
+    "DebateState",
+    "DebateRefused",
 ]

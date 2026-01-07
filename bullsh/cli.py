@@ -489,6 +489,130 @@ Be specific with numbers and cite your sources. This should read like a professi
 
 
 @app.command()
+def debate(
+    ctx: typer.Context,
+    ticker: Annotated[str, typer.Argument(help="Stock ticker to debate")],
+    deep: Annotated[
+        bool,
+        typer.Option("--deep", help="Two rebuttal rounds (more thorough, ~40K tokens)"),
+    ] = False,
+    framework: Annotated[
+        Optional[str],
+        typer.Option("--framework", "-f", help="Include framework context (piotroski, porter)"),
+    ] = None,
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o", help="Export debate to file"),
+    ] = None,
+    interactive: Annotated[
+        bool,
+        typer.Option("--interactive", "-i", help="Enter interactive mode after debate"),
+    ] = False,
+) -> None:
+    """Run adversarial bull vs. bear debate on a stock."""
+    import asyncio
+    from bullsh.agent.debate import DebateCoordinator, DebateRefused
+    from bullsh.storage import get_session_manager
+
+    try:
+        config = load_config()
+    except ConfigError as e:
+        console.print(f"[red]Configuration error:[/red] {e}")
+        raise typer.Exit(1)
+
+    # Set up debug logging if enabled
+    if ctx.obj and ctx.obj.get("debug"):
+        from bullsh.logging import setup_logging
+        log_file = setup_logging(config.logs_dir, debug=True, debug_filter=ctx.obj.get("debug_filter"))
+        console.print(f"[dim]Debug logging to: {log_file}[/dim]")
+
+    ticker = ticker.upper()
+    mode_str = "Deep" if deep else "Quick"
+    console.print(f"[bold]Bull vs. Bear Debate: {ticker}[/bold]")
+    console.print(f"[dim]Mode: {mode_str} | Framework: {framework or 'None'}[/dim]\n")
+
+    # Get framework context if specified
+    framework_context = None
+    if framework:
+        try:
+            from bullsh.frameworks.base import load_framework
+            fw = load_framework(framework)
+            framework_context = f"Framework: {fw.display_name}\nCriteria: {', '.join(c.name for c in fw.criteria)}"
+        except ValueError:
+            console.print(f"[yellow]Warning: Framework '{framework}' not found, proceeding without it[/yellow]")
+
+    # Create debate coordinator
+    coordinator = DebateCoordinator(
+        config=config,
+        ticker=ticker,
+        deep_mode=deep,
+        framework=framework,
+        framework_context=framework_context,
+    )
+
+    # Create session for saving
+    session_manager = get_session_manager()
+    session = session_manager.create(tickers=[ticker], framework=framework)
+
+    async def run_debate() -> str:
+        """Run the debate and collect output."""
+        output_text = ""
+
+        try:
+            async for chunk in coordinator.run():
+                console.print(chunk, end="")
+                output_text += chunk
+        except DebateRefused as e:
+            console.print(f"\n[red]{e}[/red]")
+            raise typer.Exit(1)
+
+        console.print()
+        return output_text
+
+    # Execute debate
+    try:
+        result = asyncio.run(run_debate())
+    except Exception as e:
+        console.print(f"\n[red]Debate failed:[/red] {e}")
+        raise typer.Exit(1)
+
+    # Save session
+    session.add_message("user", f"Debate {ticker} ({mode_str} mode)")
+    session.add_message("assistant", result)
+    session_manager.save(session)
+
+    # Show token usage
+    console.print(f"\n[dim]Tokens used: {coordinator.state.tokens_used:,}[/dim]")
+
+    # Export if requested
+    if output:
+        # Determine format from extension
+        suffix = output.suffix.lower()
+        if suffix == ".md" or suffix == "":
+            output.write_text(result)
+        else:
+            # For other formats, just save as markdown for now
+            output.write_text(result)
+        console.print(f"[dim]Saved to {output}[/dim]")
+
+    # Enter interactive mode if requested
+    if interactive:
+        console.print("\n[dim]Entering interactive mode. Type /exit to quit.[/dim]\n")
+        from bullsh.agent.orchestrator import Orchestrator
+        from bullsh.ui.repl import run_repl_with_session
+
+        orchestrator = Orchestrator(config)
+        orchestrator.session = session
+
+        # Add debate context to orchestrator history
+        from bullsh.agent.orchestrator import AgentMessage
+        orchestrator.history.append(AgentMessage(role="user", content=f"Debate {ticker}"))
+        orchestrator.history.append(AgentMessage(role="assistant", content=result))
+
+        run_repl_with_session(config, orchestrator, session, framework)
+
+
+@app.command()
 def summary(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol")],
     output: Annotated[

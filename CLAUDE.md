@@ -10,24 +10,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install dependencies
-pip install -e .
+pip install -e .                    # Core
+pip install -e ".[dev,rag,export]"  # All optional dependencies
 
 # Run the CLI
-bullsh                          # Interactive REPL (freestyle)
-bullsh research NVDA            # Freestyle research
+bullsh                              # Interactive REPL (freestyle)
+bullsh research NVDA                # Freestyle research
 bullsh research NVDA --framework piotroski  # Framework-guided
-bullsh research NVDA --framework porter
-bullsh compare AMD NVDA INTC    # Compare up to 3 companies
-bullsh thesis AAPL --output thesis.md
-bullsh frameworks list          # Show available frameworks
-bullsh frameworks create        # Interactive custom framework builder
+bullsh compare AMD NVDA INTC        # Compare up to 3 companies
+bullsh --debug                      # Enable debug logging
+bullsh --debug --debug-filter "tools,api"  # Filter debug logs
+bullsh --no-intro                   # Skip animated intro
 
 # Run tests
-pytest
-pytest --cov=src/bullsh
+pytest                              # All tests
+pytest tests/test_config.py         # Single test file
+pytest -k "test_name"               # Run specific test
+pytest --cov=bullsh                 # With coverage
 
-# Type checking (if configured)
-mypy src/bullsh
+# Linting and type checking
+ruff check bullsh/                  # Lint
+ruff format bullsh/                 # Format
+mypy bullsh/                        # Type check (strict mode)
 ```
 
 ## Architecture
@@ -35,41 +39,49 @@ mypy src/bullsh
 Uses a **hybrid orchestrator pattern** with task-based subagents for parallelism and context efficiency.
 
 ```
-src/bullsh/
+bullsh/
 ├── cli.py              # Typer app, subcommands, REPL entry
 ├── config.py           # Load .env (secrets) + config.toml (prefs)
+├── logging.py          # Debug logging with filtering
 ├── agent/
-│   ├── orchestrator.py # Lightweight dispatcher, selective context passing
-│   ├── base.py         # Base agent class with iteration bounds (max 3)
+│   ├── orchestrator.py # Lightweight dispatcher, handles tool loop (max 15 iterations)
+│   ├── base.py         # SubAgent ABC with bounded iterations
 │   ├── research.py     # Single-company deep dive subagent
-│   ├── compare.py      # Multi-company parallel research subagent
-│   ├── thesis.py       # Thesis structuring subagent
-│   ├── context.py      # Smart compression, selective passing
-│   ├── tools.py        # Tool definitions (JSON schema for Claude)
-│   └── prompts.py      # System prompts for each agent type
+│   └── compare.py      # Multi-company parallel research subagent
+├── factors/            # Multi-factor analysis module (pure Python math)
+│   ├── calculator.py   # Z-score calculations across factors
+│   ├── regression.py   # Fama-French factor regression
+│   ├── scenarios.py    # What-if scenario modeling
+│   ├── session.py      # Interactive factor session state machine
+│   ├── fetcher.py      # Price/factor data fetching
+│   └── excel_factors.py # Factor analysis Excel export
 ├── frameworks/
 │   ├── base.py         # Framework loader, base class
-│   ├── builtin/        # Ships with package (piotroski.toml, porter.toml, pitch.toml)
 │   ├── piotroski.py    # F-Score computation (9-point quantitative)
 │   ├── porter.py       # Five Forces extraction (qualitative)
-│   └── custom.py       # Custom framework parser/validator
+│   └── valuation.py    # Multi-method price targets
 ├── tools/
-│   ├── base.py         # ToolResult dataclass with confidence scores
-│   ├── sec.py          # SEC EDGAR via edgartools
-│   ├── stocktwits.py   # Primary social sentiment (scraping)
-│   ├── reddit.py       # Fallback social sentiment (scraping)
-│   ├── yahoo.py        # Analyst ratings (scraping, returns confidence)
-│   ├── news.py         # DuckDuckGo news search
-│   ├── ratios.py       # P/E, EV/EBITDA computation
-│   └── thesis.py       # Export with YAML frontmatter provenance
+│   ├── base.py         # ToolResult dataclass, ToolDefinition, get_tools_for_claude()
+│   ├── sec.py          # SEC EDGAR via edgartools (auto-indexes for RAG)
+│   ├── social.py       # StockTwits (primary) + Reddit (fallback) sentiment
+│   ├── yahoo.py        # Analyst ratings, price data via yfinance
+│   ├── news.py         # DuckDuckGo news + web search
+│   ├── rag.py          # Vector search over indexed SEC filings
+│   ├── excel.py        # Excel spreadsheet generation
+│   ├── export.py       # PDF/DOCX export
+│   ├── factors.py      # Factor calculation tool wrapper
+│   └── thesis.py       # Thesis export with YAML frontmatter provenance
 ├── ui/
-│   ├── repl.py         # Interactive loop with Rich
-│   ├── display.py      # Tables, streaming output
-│   ├── commands.py     # Slash command handlers (/cache, /sources, etc.)
-│   └── keybindings.py  # Ctrl+S, Ctrl+L, etc.
+│   ├── repl.py         # Interactive loop with Rich + prompt_toolkit
+│   ├── intro.py        # Animated candlestick intro
+│   ├── theme.py        # Color theme
+│   ├── formatter.py    # Response formatting
+│   └── status.py       # Tool status indicators
 └── storage/
-    ├── cache.py        # User-controlled cache refresh
-    └── sessions.py     # Topic-inferred session naming, summarized history
+    ├── cache.py        # HTTP response caching
+    ├── sessions.py     # Session persistence and search
+    ├── vectordb.py     # DuckDB vector storage for RAG
+    └── artifacts.py    # Export artifact tracking
 ```
 
 ## Analysis Frameworks
@@ -85,29 +97,42 @@ Frameworks provide **structure, not constraints**. They guide research while pre
 
 **Philosophy**: The thesis is the user's - shaped by their questions, interpretations, and follow-ups. Two users researching the same stock produce different theses.
 
+## Factor Analysis Module
+
+The `factors/` module provides multi-factor stock analysis with pure Python calculations (no LLM calls for math). Key concepts:
+
+- **Z-scores**: Cross-sectional comparison against peer group (value, momentum, quality, growth, size, volatility)
+- **Fama-French regression**: Decomposes returns into market, size (SMB), and value (HML) factor exposures
+- **Scenario modeling**: What-if analysis for factor shocks
+- **Token-efficient**: All math is local; LLM only used for interpretation
+
+The module uses a state machine (`FactorSession`) with stages: TICKER_INPUT → PEER_SELECTION → FACTOR_ANALYSIS → REGRESSION → SCENARIOS
+
 ## Key Design Decisions
 
 - **Frameworks as compass**: Guide conversation without limiting exploration; users can override assessments
-- **Hybrid orchestrator**: Lightweight dispatcher routes to task-based subagents (research, compare, thesis)
-- **Selective context**: Orchestrator decides what context each subagent needs, not full conversation
-- **Bounded iterations**: Max 3 tool calls per subagent to prevent runaway cost
+- **Hybrid orchestrator**: Lightweight dispatcher routes to task-based subagents (research, compare)
+- **Bounded iterations**: Max 15 tool iterations in orchestrator, max 10 per subagent
 - **Parallel in compare**: Compare agent spawns research subagents in parallel (one per company)
-- **Graceful degradation**: Failed subagents noted in response, never blocks entire flow
+- **Graceful degradation**: Failed tools noted in response with confidence scores, never blocks flow
 - **Single API key**: Only Anthropic API required; all data sources are free/scraped
-- **Confidence scores**: All scraped tools return `ToolResult` with confidence 0-1
-- **Minimum data threshold**: Requires at least one 10-K filing; refuses private companies
-- **Tone enforcement**: System prompt prohibits "buy/sell" recommendations
+- **Confidence scores**: All tools return `ToolResult` with confidence 0-1 and status
+- **RAG-first for filings**: SEC filings auto-index on fetch; use `rag_search` before `web_search` for filing content
+- **Prompt caching**: System prompts cached with `ephemeral` cache_control for 90% cost reduction
+- **Token limits**: Session and per-turn limits with warnings at 80% threshold
 
 ## Testing
 
-Unit tests with mocked responses only - no external network calls in CI. Fixtures in `tests/` provide sample SEC filings, Yahoo HTML, etc.
+Unit tests with mocked responses only - no external network calls in CI. Uses `pytest-asyncio` with `asyncio_mode = "auto"`.
 
-## Planning & Roadmap
+```bash
+pytest                          # All tests
+pytest tests/test_config.py     # Single file
+pytest -k "test_tool"           # Pattern match
+pytest -v --tb=short            # Verbose with short tracebacks (default)
+```
 
-See `PLANNING.md` for detailed implementation plans for remaining work:
-- Subagent architecture (parallel research)
-- Keybindings (Ctrl+S, etc.)
-- Test coverage expansion
+Mock HTTP responses with `respx` for httpx-based tools.
 
 ## Changelog Maintenance
 

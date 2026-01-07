@@ -85,6 +85,9 @@ class BullshCompleter(Completer):
         ("/save", "Save current session"),
         ("/sessions", "List saved sessions"),
         ("/resume", "Resume a previous session"),
+        ("/debate", "Run bull vs. bear debate on a stock"),
+        ("/debate TICKER", "Debate with default quick mode"),
+        ("/debate TICKER --deep", "Debate with two rebuttal rounds"),
         ("/export", "Export research (md/pdf/docx)"),
         ("/excel", "Generate Excel financial model"),
         ("/format", "Re-display last response beautifully formatted"),
@@ -110,6 +113,7 @@ class BullshCompleter(Completer):
     COMMANDS = [
         ("research", "Research a single company (e.g., research NVDA)"),
         ("compare", "Compare 2-3 companies (e.g., compare AAPL MSFT)"),
+        ("debate", "Run bull vs. bear debate (e.g., debate NVDA)"),
         ("thesis", "Generate investment thesis (e.g., thesis TSLA)"),
         ("summary", "Quick company overview (e.g., summary GOOGL)"),
         ("frameworks", "List available analysis frameworks"),
@@ -492,6 +496,15 @@ async def _handle_command(
                 return "handled"
             ticker = remaining_args[0].upper()
             await _run_thesis(orchestrator, session, ticker, config)
+            return "handled"
+
+        case "debate":
+            if not remaining_args:
+                console.print("[red]Usage: debate <TICKER> [--deep] [--framework <name>][/red]")
+                return "handled"
+            ticker = remaining_args[0].upper()
+            deep_mode = "--deep" in args or "-d" in args
+            await _run_debate(orchestrator, session, ticker, framework_override, deep_mode, config)
             return "handled"
 
         case "summary":
@@ -1194,6 +1207,109 @@ Keep the response under 300 words."""
     await _execute_agent_query(orchestrator, session, prompt, None)
 
 
+async def _run_debate(
+    orchestrator: Orchestrator,
+    session: Session,
+    ticker: str,
+    framework: str | None,
+    deep_mode: bool,
+    config: Config,
+) -> None:
+    """Execute bull vs. bear debate with interactive pause points."""
+    from bullsh.agent.debate import DebateCoordinator, DebateRefused
+
+    mode_str = "Deep" if deep_mode else "Quick"
+    console.print(f"[bold]Bull vs. Bear Debate: {ticker}[/bold]")
+    console.print(f"[dim]Mode: {mode_str} | Framework: {framework or 'None'}[/dim]")
+    console.print(f"[dim]Tip: You can coach agents at pause points (e.g., 'bear: mention delays')[/dim]\n")
+
+    if ticker not in session.tickers:
+        session.tickers.append(ticker)
+
+    # Get framework context if specified
+    framework_context = None
+    if framework:
+        try:
+            from bullsh.frameworks.base import load_framework
+            fw = load_framework(framework)
+            framework_context = f"Framework: {fw.display_name}\nCriteria: {', '.join(c.name for c in fw.criteria)}"
+        except ValueError:
+            console.print(f"[yellow]Warning: Framework '{framework}' not found, proceeding without it[/yellow]")
+
+    # Create debate coordinator
+    coordinator = DebateCoordinator(
+        config=config,
+        ticker=ticker,
+        deep_mode=deep_mode,
+        framework=framework,
+        framework_context=framework_context,
+    )
+
+    session_manager = get_session_manager()
+
+    # Phase display names for user
+    phase_names = {
+        "research": "Research",
+        "opening": "Opening Arguments",
+        "rebuttals": "Rebuttals",
+    }
+
+    try:
+        output_text = ""
+
+        async for chunk in coordinator.run():
+            # Check for pause markers
+            if chunk.startswith("<<PHASE_PAUSE:"):
+                phase = chunk.split(":")[1].rstrip(">>")
+                phase_display = phase_names.get(phase, phase.title())
+
+                # Show pause prompt
+                console.print(f"\n[dim]{'─' * 50}[/dim]")
+                console.print(f"[dim]{phase_display} complete. Press Enter to continue,[/dim]")
+                console.print(f"[dim]or type hint (e.g., 'bear: mention robotaxi delays')[/dim]")
+
+                try:
+                    user_input = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: input("> ").strip()
+                    )
+
+                    # Parse prefix-based hints: "bull: hint text" or "bear: hint text"
+                    if user_input and ":" in user_input:
+                        target, hint = user_input.split(":", 1)
+                        target = target.strip().lower()
+                        if target in ("bull", "bear"):
+                            coordinator.queue_hint(target, hint.strip())
+                            console.print(f"[green]✓ Hint queued for {target}[/green]")
+                        else:
+                            console.print(f"[yellow]Hint ignored (use 'bull:' or 'bear:' prefix)[/yellow]")
+                    elif user_input:
+                        console.print(f"[yellow]Hint ignored (use 'bull:' or 'bear:' prefix)[/yellow]")
+
+                except (KeyboardInterrupt, EOFError):
+                    console.print("\n[dim]Debate cancelled.[/dim]")
+                    return
+
+                console.print()
+            else:
+                console.print(chunk, end="")
+                output_text += chunk
+
+        console.print()
+
+        # Save to session
+        session.add_message("user", f"Debate {ticker} ({mode_str} mode)")
+        session.add_message("assistant", output_text)
+        session_manager.save(session)
+
+        # Show token usage
+        console.print(f"\n[dim]Debate complete. Tokens used: {coordinator.state.tokens_used:,}[/dim]")
+
+    except DebateRefused as e:
+        console.print(f"\n[red]{e}[/red]")
+    except Exception as e:
+        console.print(f"\n[red]Debate failed:[/red] {e}")
+
+
 async def _execute_agent_query(
     orchestrator: Orchestrator,
     session: Session,
@@ -1351,6 +1467,26 @@ async def _handle_slash_command(
             except ValueError as e:
                 console.print(f"[red]Error: {e}[/red]")
                 return None
+
+        case "/debate":
+            # Parse: /debate TICKER [--deep] [--framework piotroski]
+            parts = args.split() if args else []
+            if not parts:
+                console.print("[red]Usage: /debate <TICKER> [--deep] [--framework <name>][/red]")
+                console.print("[dim]Example: /debate NVDA --deep --framework piotroski[/dim]")
+                return None
+
+            ticker = parts[0].upper()
+            deep_mode = "--deep" in parts or "-d" in parts
+            framework_override = current_framework
+
+            # Parse --framework flag
+            for i, part in enumerate(parts):
+                if part in ("--framework", "-f") and i + 1 < len(parts):
+                    framework_override = parts[i + 1]
+
+            await _run_debate(orchestrator, session, ticker, framework_override, deep_mode, config)
+            return None
 
         case "/cache":
             subparts = args.split(maxsplit=1)
@@ -1822,6 +1958,8 @@ def _show_help() -> None:
   [cyan]research <TICKER> -f piotroski[/cyan]   With Piotroski F-Score
   [cyan]research <TICKER> -f porter[/cyan]      With Porter's Five Forces
   [cyan]compare <T1> <T2> [T3][/cyan]      Compare up to 3 companies (parallel)
+  [cyan]debate <TICKER>[/cyan]             Bull vs. bear adversarial debate
+  [cyan]debate <TICKER> --deep[/cyan]      Debate with 2 rebuttal rounds
   [cyan]thesis <TICKER>[/cyan]             Generate investment thesis
   [cyan]summary <TICKER>[/cyan]            Quick company overview
   [cyan]frameworks list[/cyan]             Show available frameworks
