@@ -4,6 +4,106 @@ All notable changes to bullsh will be documented in this file. Written in plain 
 
 ---
 
+## 2026-01-10 - Agent Communication Enhancement: Proactive Suggestions
+
+**Developer**: Alexander Duria
+
+### Added
+
+- **Proactive Suggestions**: Numbered next-step menus after every agent response
+  - Shows relevant actions based on current context (research, debate, compare, etc.)
+  - Format: `[1] Compare NVDA with a peer [2] Run Piotroski F-Score [3] Generate thesis`
+  - Visual `...` hint for suggestions that need additional input
+
+- **Quick Numeric Execution**: Type `1`, `2`, `[1]`, `[2]` to execute suggestions
+  - For suggestions needing input, prompts inline for additional text
+  - Clears suggestions after execution
+
+- **Contextual Tips**: Non-repetitive tips shown once per session
+  - "Tip: Use /framework piotroski for quantitative health scoring" (after first research)
+  - "Tip: Use /compare NVDA AMD for side-by-side analysis" (when 2+ tickers researched)
+  - "Tip: Use /save to preserve your research session" (after 10+ messages)
+  - Tips track `tips_shown` set to avoid repetition
+
+- **Context-Aware Suggestion Engine**: Generates suggestions based on:
+  - Action type: research, debate, compare, framework, conversation
+  - Session tickers and framework
+  - Message count for session-length-based suggestions
+
+### UX Example
+
+```
+> research NVDA
+
+[Agent researches NVIDIA...]
+
+Tip: Use /framework piotroski for quantitative health scoring
+
+Next steps:
+  [1] Compare NVDA with a peer ...
+  [2] Run Piotroski F-Score
+  [3] Generate investment thesis
+  [4] Export to Excel
+
+> 1
+/compare NVDA AMD
+
+[Agent compares NVDA vs AMD...]
+
+Next steps:
+  [1] Deep dive on NVDA
+  [2] Deep dive on AMD
+  [3] Run valuation on both
+  [4] Export comparison
+```
+
+### Files Created
+
+- `bullsh/ui/suggestions.py` - SuggestionEngine, TipEngine, SuggestionState, format helpers
+
+### Files Modified
+
+- `bullsh/ui/repl.py` - Integrated suggestion engines into REPL loop, updated command handlers
+
+---
+
+## 2026-01-10 - CLI Command Palette Enhancement
+
+**Developer**: Alexander Duria
+
+### Added
+
+- **Interactive Command Palette**: Slash commands now show as you type
+  - Menu appears immediately on `/` keystroke
+  - Filters as you type (`/deb` → shows `/debate`)
+  - Arrow keys + Enter for navigation (standard prompt_toolkit)
+
+- **Hierarchical Sub-Menus**: Commands with options show decision trees
+  - `/framework` → shows piotroski, porter, valuation, pitch, factors, off
+  - `/cache` → shows stats, list, clear, refresh
+  - `/rag` → shows stats, list, clear
+  - Visual arrow `→` indicator for commands with sub-menus
+
+- **Ticker Suggestions**: Recent tickers from session shown in completions
+  - After `/debate `, `/research `, `/compare ` → shows last 5 session tickers
+  - Helps quickly re-research stocks you've looked at
+
+- **Inline Placeholder Hints**: Commands show required/optional args
+  - `/debate <TICKER>` shows argument expectations
+  - `[optional]` and `<required>` formatting
+
+### Changed
+
+- **complete_while_typing**: Enabled (was Tab-only before)
+- **BullshCompleter**: Restructured from flat list to hierarchical dict
+- **Session wiring**: Completer now receives session for ticker suggestions
+
+### Files Modified
+
+- `bullsh/ui/repl.py` - Restructured `BullshCompleter`, updated `_get_prompt_session()`
+
+---
+
 ## 2026-01-06 - Debate UX: Interactive Pauses + Fresh Data
 
 **Developer**: Alexander Duria
