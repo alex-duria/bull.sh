@@ -30,6 +30,15 @@ from bullsh.storage import (
     get_session_manager,
 )
 from bullsh.ui.theme import RICH_THEME, COLORS
+from bullsh.ui.suggestions import (
+    SuggestionEngine,
+    TipEngine,
+    SuggestionState,
+    SuggestionContext,
+    format_suggestions,
+    format_tip,
+    parse_numeric_input,
+)
 
 
 def _cleanup_on_exit():
@@ -53,6 +62,8 @@ _kb_action = KeybindingAction()
 
 def _create_keybindings() -> KeyBindings:
     """Create prompt_toolkit keybindings for the REPL."""
+    from prompt_toolkit.filters import completion_is_selected, has_completions
+
     kb = KeyBindings()
 
     @kb.add('c-s')
@@ -73,44 +84,93 @@ def _create_keybindings() -> KeyBindings:
         _kb_action.action = "export"
         event.app.exit(result="")
 
+    @kb.add('enter', filter=completion_is_selected)
+    def _(event):
+        """When completion is selected, Enter accepts it and adds a space to continue typing."""
+        buf = event.app.current_buffer
+        completion = buf.complete_state.current_completion
+        if completion:
+            buf.apply_completion(completion)
+            # Add space so user can continue typing arguments
+            buf.insert_text(' ')
+
+    @kb.add('tab', filter=has_completions)
+    def _(event):
+        """Tab accepts the current completion."""
+        buf = event.app.current_buffer
+        if buf.complete_state and buf.complete_state.current_completion:
+            buf.apply_completion(buf.complete_state.current_completion)
+
     return kb
 
 
 class BullshCompleter(Completer):
-    """Custom completer for bullsh commands."""
+    """Custom completer for bullsh commands with hierarchical menus."""
 
-    # Slash commands with descriptions
-    SLASH_COMMANDS = [
-        ("/help", "Show help and available commands"),
-        ("/save", "Save current session"),
-        ("/sessions", "List saved sessions"),
-        ("/resume", "Resume a previous session"),
-        ("/debate", "Run bull vs. bear debate on a stock"),
-        ("/debate TICKER", "Debate with default quick mode"),
-        ("/debate TICKER --deep", "Debate with two rebuttal rounds"),
-        ("/export", "Export research (md/pdf/docx)"),
-        ("/excel", "Generate Excel financial model"),
-        ("/format", "Re-display last response beautifully formatted"),
-        ("/framework", "Switch analysis framework"),
-        ("/framework piotroski", "Use Piotroski F-Score (9-point financial health)"),
-        ("/framework porter", "Use Porter's Five Forces (competitive analysis)"),
-        ("/framework pitch", "Use Hedge Fund Stock Pitch format"),
-        ("/framework valuation", "Use Valuation Analysis (price targets)"),
-        ("/framework factors", "Interactive multi-factor stock analysis"),
-        ("/framework off", "Return to freestyle mode"),
-        ("/checklist", "Show framework progress checklist"),
-        ("/cache", "Show cache statistics"),
-        ("/cache clear", "Clear all cached data"),
-        ("/rag", "Show RAG vector database stats"),
-        ("/rag list", "List indexed SEC filings"),
-        ("/sources", "Show data sources used this session"),
-        ("/usage", "Show token usage and cost"),
-        ("/config", "Show current configuration"),
-        ("/exit", "Exit bullsh"),
-    ]
+    # Hierarchical command definitions
+    SLASH_COMMANDS: dict[str, dict] = {
+        # Research commands
+        "/research": {"desc": "Research a company", "args": "<TICKER>", "opts": ["-f FRAMEWORK"]},
+        "/compare": {"desc": "Compare 2-3 companies", "args": "<T1> <T2> [T3]", "opts": ["-f FRAMEWORK"]},
+        "/debate": {"desc": "Bull vs Bear debate", "args": "<TICKER>", "opts": ["--deep", "-f FRAMEWORK"]},
+        "/thesis": {"desc": "Generate investment thesis", "args": "[TICKER]"},
 
-    # Top-level commands with descriptions
-    COMMANDS = [
+        # Framework (submenu)
+        "/framework": {
+            "desc": "Switch analysis framework",
+            "submenu": {
+                "piotroski": "9-point financial health scoring",
+                "porter": "Porter's Five Forces analysis",
+                "valuation": "Multi-method price targets",
+                "pitch": "Hedge fund thesis format",
+                "factors": "Interactive multi-factor analysis",
+                "off": "Return to freestyle mode",
+            },
+        },
+
+        # Export commands
+        "/excel": {"desc": "Generate Excel model", "args": "[TICKER]"},
+        "/export": {"desc": "Export research (md/pdf/docx)", "args": "[filename]"},
+
+        # Session commands
+        "/save": {"desc": "Save current session", "args": "[name]"},
+        "/sessions": {"desc": "List saved sessions"},
+        "/resume": {"desc": "Resume a session", "args": "<SESSION_ID>"},
+        "/clear": {"desc": "Clear current session"},
+
+        # Cache (submenu)
+        "/cache": {
+            "desc": "Cache management",
+            "submenu": {
+                "stats": "Show cache statistics",
+                "list": "List cached entries",
+                "clear": "Clear all cached data",
+                "refresh": "Refresh ticker cache",
+            },
+        },
+
+        # RAG (submenu)
+        "/rag": {
+            "desc": "Vector database",
+            "submenu": {
+                "stats": "Show RAG statistics",
+                "list": "List indexed filings",
+                "clear": "Clear vector database",
+            },
+        },
+
+        # Info commands
+        "/sources": {"desc": "Show data sources used"},
+        "/usage": {"desc": "Show token usage and cost"},
+        "/checklist": {"desc": "Show framework progress"},
+        "/format": {"desc": "Re-format last response"},
+        "/config": {"desc": "Show configuration"},
+        "/help": {"desc": "Show help"},
+        "/exit": {"desc": "Exit bullsh"},
+    }
+
+    # Top-level commands (without slash)
+    TOP_COMMANDS: list[tuple[str, str]] = [
         ("research", "Research a single company (e.g., research NVDA)"),
         ("compare", "Compare 2-3 companies (e.g., compare AAPL MSFT)"),
         ("debate", "Run bull vs. bear debate (e.g., debate NVDA)"),
@@ -119,76 +179,139 @@ class BullshCompleter(Completer):
         ("frameworks", "List available analysis frameworks"),
     ]
 
-    # Framework suggestions
-    FRAMEWORKS = [
-        ("piotroski", "9-point quantitative financial health score"),
-        ("porter", "Porter's Five Forces competitive analysis"),
-        ("pitch", "Hedge Fund Stock Pitch thesis format"),
-        ("valuation", "Multi-method price target generation"),
-        ("factors", "Interactive multi-factor stock analysis"),
-    ]
+    # Commands that accept tickers
+    TICKER_COMMANDS = {"/research", "/compare", "/debate", "/thesis", "/excel"}
+
+    def __init__(self, session: Session | None = None):
+        """Initialize completer with optional session for ticker suggestions."""
+        self.session = session
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
-        word = document.get_word_before_cursor()
+        text_lower = text.lower()
 
-        # Slash commands - show when typing /
+        # === SLASH COMMANDS ===
         if text.startswith("/"):
-            typed = text.lower()
-            for cmd, desc in self.SLASH_COMMANDS:
-                if cmd.lower().startswith(typed):
+            # Check for sub-menu context first
+            for cmd, data in self.SLASH_COMMANDS.items():
+                if "submenu" in data and text_lower.startswith(cmd + " "):
+                    # Show sub-menu options
+                    subtext = text[len(cmd) + 1:]  # Text after "/cmd "
+                    for opt, desc in data["submenu"].items():
+                        if opt.startswith(subtext.lower()):
+                            yield Completion(
+                                opt,
+                                start_position=-len(subtext),
+                                display_meta=desc,
+                            )
+                    return
+
+            # Check for ticker command context (e.g., "/debate ")
+            for cmd in self.TICKER_COMMANDS:
+                if text_lower.startswith(cmd + " "):
+                    remaining = text[len(cmd) + 1:]
+                    # If no ticker yet, show session tickers
+                    if " " not in remaining:
+                        yield from self._get_ticker_completions(remaining)
+                    # After ticker, show options
+                    else:
+                        yield from self._get_option_completions(cmd, remaining)
+                    return
+
+            # Show all matching slash commands
+            for cmd, data in self.SLASH_COMMANDS.items():
+                if cmd.startswith(text_lower):
+                    # Add arrow indicator for commands with sub-menus
+                    has_submenu = "submenu" in data
+                    display = f"{cmd} →" if has_submenu else cmd
+                    # Add argument hint
+                    if data.get("args"):
+                        display = f"{cmd} {data['args']}"
+
                     yield Completion(
                         cmd,
                         start_position=-len(text),
-                        display_meta=desc,
+                        display=display,
+                        display_meta=data["desc"],
                     )
 
-        # Top-level commands - show at start of input
-        elif not text or text == word:
-            typed = text.lower()
-            for cmd, desc in self.COMMANDS:
+        # === TOP-LEVEL COMMANDS ===
+        elif not text or text == document.get_word_before_cursor():
+            typed = text_lower
+            for cmd, desc in self.TOP_COMMANDS:
                 if cmd.startswith(typed):
                     yield Completion(
                         cmd,
                         start_position=-len(text),
                         display_meta=desc,
                     )
-            # Also show slash commands at empty prompt
+            # Show top slash commands at empty prompt
             if not text:
-                for cmd, desc in self.SLASH_COMMANDS[:5]:  # Top 5 slash commands
+                priority_cmds = ["/research", "/debate", "/compare", "/framework", "/help"]
+                for cmd in priority_cmds:
+                    data = self.SLASH_COMMANDS[cmd]
                     yield Completion(
                         cmd,
                         start_position=0,
-                        display_meta=desc,
+                        display_meta=data["desc"],
                     )
 
-        # Framework suggestions after -f or --framework
+        # === FRAMEWORK FLAG ===
         elif text.endswith("-f ") or text.endswith("--framework "):
-            for fw, desc in self.FRAMEWORKS:
+            for opt, desc in self.SLASH_COMMANDS["/framework"]["submenu"].items():
+                if opt != "off":  # Don't suggest 'off' as framework flag value
+                    yield Completion(opt, start_position=0, display_meta=desc)
+
+        # === TOP-LEVEL COMMAND ARGUMENTS ===
+        elif any(text_lower.startswith(cmd + " ") for cmd in ["research", "compare", "debate", "thesis", "summary"]):
+            for cmd in ["research", "compare", "debate", "thesis", "summary"]:
+                if text_lower.startswith(cmd + " "):
+                    remaining = text[len(cmd) + 1:]
+                    # If looks like start of ticker, suggest session tickers
+                    if " " not in remaining:
+                        yield from self._get_ticker_completions(remaining)
+                    # After ticker, suggest framework flag
+                    elif "-f" not in text and "--framework" not in text:
+                        yield Completion("-f", start_position=0, display_meta="Add framework analysis")
+                    break
+
+    def _get_ticker_completions(self, prefix: str):
+        """Yield ticker completions from session history."""
+        prefix_upper = prefix.upper()
+
+        # Yield session tickers first
+        if self.session and self.session.tickers:
+            for ticker in reversed(self.session.tickers[-5:]):  # Most recent first
+                if ticker.upper().startswith(prefix_upper):
+                    yield Completion(
+                        ticker.upper(),
+                        start_position=-len(prefix),
+                        display_meta="Recent",
+                    )
+
+        # Show placeholder hint
+        if not prefix:
+            yield Completion(
+                "",
+                display="<TICKER>",
+                display_meta="Enter stock symbol (e.g., NVDA)",
+            )
+
+    def _get_option_completions(self, cmd: str, remaining: str):
+        """Yield option completions for a command."""
+        data = self.SLASH_COMMANDS.get(cmd, {})
+        opts = data.get("opts", [])
+
+        for opt in opts:
+            if opt not in remaining:
                 yield Completion(
-                    fw,
+                    " " + opt,
                     start_position=0,
-                    display_meta=desc,
+                    display_meta=f"Optional: {opt}",
                 )
 
-        # After "research", "thesis", "summary" - could suggest recent tickers
-        # For now, just show placeholder
-        elif any(text.lower().startswith(cmd + " ") for cmd in ["research", "thesis", "summary"]):
-            # Show framework flag as option
-            if "-f" not in text and "--framework" not in text:
-                yield Completion(
-                    "-f piotroski",
-                    start_position=0,
-                    display_meta="Add Piotroski F-Score analysis",
-                )
-                yield Completion(
-                    "-f porter",
-                    start_position=0,
-                    display_meta="Add Porter's Five Forces analysis",
-                )
 
-
-def _get_prompt_session(config: Config) -> PromptSession:
+def _get_prompt_session(config: Config, session: Session | None = None) -> PromptSession:
     """Create a prompt_toolkit session with history, keybindings, and completion."""
     history_file = config.data_dir / ".history"
 
@@ -205,8 +328,8 @@ def _get_prompt_session(config: Config) -> PromptSession:
     return PromptSession(
         history=FileHistory(str(history_file)),
         key_bindings=_create_keybindings(),
-        completer=BullshCompleter(),
-        complete_while_typing=False,  # Only complete on Tab
+        completer=BullshCompleter(session=session),
+        complete_while_typing=True,  # Show completions as you type
         style=style,
     )
 
@@ -318,7 +441,12 @@ async def _repl_loop(
     """Core REPL loop."""
     current_framework = framework
     session_manager = get_session_manager()
-    prompt_session = _get_prompt_session(config)
+    prompt_session = _get_prompt_session(config, session=session)
+
+    # Initialize suggestion and tip engines
+    suggestion_engine = SuggestionEngine()
+    tip_engine = TipEngine()
+    suggestion_state = SuggestionState()
 
     while True:
         try:
@@ -358,6 +486,29 @@ async def _repl_loop(
         if not user_input.strip():
             continue
 
+        # Handle numeric input for suggestion execution
+        numeric_choice = parse_numeric_input(user_input)
+        if numeric_choice is not None:
+            command = suggestion_state.get_command(numeric_choice)
+            if command:
+                needs_more = suggestion_state.needs_input(numeric_choice)
+                if needs_more:
+                    # Command needs additional input (e.g., "/compare NVDA ")
+                    console.print(f"[dim]{command}[/dim]", end="")
+                    try:
+                        extra = await asyncio.get_event_loop().run_in_executor(
+                            None, lambda: input("")
+                        )
+                        user_input = command + extra.strip()
+                    except (KeyboardInterrupt, EOFError):
+                        continue
+                else:
+                    user_input = command
+                suggestion_state.clear()
+            else:
+                console.print(f"[dim]No suggestion #{numeric_choice}[/dim]")
+                continue
+
         # Handle slash commands
         if user_input.startswith("/"):
             result = await _handle_slash_command(
@@ -366,6 +517,9 @@ async def _repl_loop(
                 session,
                 current_framework,
                 config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
             )
             if result == "exit":
                 session_manager.save(session)
@@ -389,6 +543,9 @@ async def _repl_loop(
             session,
             current_framework,
             config,
+            suggestion_engine=suggestion_engine,
+            tip_engine=tip_engine,
+            suggestion_state=suggestion_state,
         )
         if command_result is not None:
             if command_result.startswith("framework:"):
@@ -413,6 +570,25 @@ async def _repl_loop(
             session.add_message("user", user_input)
             session.add_message("assistant", response_text)
 
+            # Show suggestions and tips after response
+            context = SuggestionContext(
+                action="conversation",
+                tickers=session.tickers.copy(),
+                framework=current_framework,
+                message_count=len(session.messages),
+            )
+
+            # Show tip (if applicable)
+            tip = tip_engine.get_tip(context)
+            if tip:
+                console.print(format_tip(tip))
+
+            # Show suggestions
+            suggestions = suggestion_engine.get_suggestions(context)
+            if suggestions:
+                suggestion_state.set_suggestions(suggestions)
+                console.print(format_suggestions(suggestions))
+
             # Auto-save periodically
             if len(session.messages) % 4 == 0:
                 session_manager.save(session)
@@ -431,6 +607,10 @@ async def _handle_command(
     session: Session,
     current_framework: str | None,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> str | None:
     """
     Parse and handle built-in commands like 'research NVDA'.
@@ -476,7 +656,12 @@ async def _handle_command(
                 console.print("[red]Usage: research <TICKER>[/red]")
                 return "handled"
             ticker = remaining_args[0].upper()
-            await _run_research(orchestrator, session, ticker, framework_override, config)
+            await _run_research(
+                orchestrator, session, ticker, framework_override, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
             return "handled"
 
         case "compare":
@@ -487,7 +672,12 @@ async def _handle_command(
                 console.print("[red]Maximum 3 tickers for comparison[/red]")
                 return "handled"
             tickers = [t.upper() for t in remaining_args[:3]]
-            await _run_compare(orchestrator, session, tickers, framework_override, config)
+            await _run_compare(
+                orchestrator, session, tickers, framework_override, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
             return "handled"
 
         case "thesis":
@@ -495,7 +685,12 @@ async def _handle_command(
                 console.print("[red]Usage: thesis <TICKER>[/red]")
                 return "handled"
             ticker = remaining_args[0].upper()
-            await _run_thesis(orchestrator, session, ticker, config)
+            await _run_thesis(
+                orchestrator, session, ticker, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
             return "handled"
 
         case "debate":
@@ -504,7 +699,12 @@ async def _handle_command(
                 return "handled"
             ticker = remaining_args[0].upper()
             deep_mode = "--deep" in args or "-d" in args
-            await _run_debate(orchestrator, session, ticker, framework_override, deep_mode, config)
+            await _run_debate(
+                orchestrator, session, ticker, framework_override, deep_mode, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
             return "handled"
 
         case "summary":
@@ -512,7 +712,12 @@ async def _handle_command(
                 console.print("[red]Usage: summary <TICKER>[/red]")
                 return "handled"
             ticker = remaining_args[0].upper()
-            await _run_summary(orchestrator, session, ticker, config)
+            await _run_summary(
+                orchestrator, session, ticker, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
             return "handled"
 
         case "frameworks":
@@ -1081,6 +1286,10 @@ async def _run_research(
     ticker: str,
     framework: str | None,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> None:
     """Execute research command."""
     console.print(f"[bold]Researching {ticker}[/bold]")
@@ -1099,7 +1308,13 @@ async def _run_research(
     elif framework == "porter":
         prompt += " Apply Porter's Five Forces framework and analyze each competitive force."
 
-    await _execute_agent_query(orchestrator, session, prompt, framework)
+    await _execute_agent_query(
+        orchestrator, session, prompt, framework,
+        action="research",
+        suggestion_engine=suggestion_engine,
+        tip_engine=tip_engine,
+        suggestion_state=suggestion_state,
+    )
 
 
 async def _run_compare(
@@ -1108,6 +1323,10 @@ async def _run_compare(
     tickers: list[str],
     framework: str | None,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> None:
     """Execute compare command."""
     ticker_list = ", ".join(tickers)
@@ -1136,7 +1355,13 @@ Conclude with which company appears most attractive and why."""
     elif framework == "porter":
         prompt += "\n\nAnalyze Porter's Five Forces for each company."
 
-    await _execute_agent_query(orchestrator, session, prompt, framework)
+    await _execute_agent_query(
+        orchestrator, session, prompt, framework,
+        action="compare",
+        suggestion_engine=suggestion_engine,
+        tip_engine=tip_engine,
+        suggestion_state=suggestion_state,
+    )
 
 
 async def _run_thesis(
@@ -1144,6 +1369,10 @@ async def _run_thesis(
     session: Session,
     ticker: str,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> None:
     """Execute thesis command."""
     console.print(f"[bold]Generating thesis for {ticker}[/bold]")
@@ -1179,7 +1408,13 @@ Final investment assessment with expected return potential.
 
 Be specific with numbers and cite your sources."""
 
-    await _execute_agent_query(orchestrator, session, prompt, "pitch")
+    await _execute_agent_query(
+        orchestrator, session, prompt, "pitch",
+        action="framework",
+        suggestion_engine=suggestion_engine,
+        tip_engine=tip_engine,
+        suggestion_state=suggestion_state,
+    )
 
 
 async def _run_summary(
@@ -1187,6 +1422,10 @@ async def _run_summary(
     session: Session,
     ticker: str,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> None:
     """Execute summary command."""
     console.print(f"[bold]Quick Summary: {ticker}[/bold]\n")
@@ -1204,7 +1443,13 @@ async def _run_summary(
 
 Keep the response under 300 words."""
 
-    await _execute_agent_query(orchestrator, session, prompt, None)
+    await _execute_agent_query(
+        orchestrator, session, prompt, None,
+        action="research",
+        suggestion_engine=suggestion_engine,
+        tip_engine=tip_engine,
+        suggestion_state=suggestion_state,
+    )
 
 
 async def _run_debate(
@@ -1214,6 +1459,10 @@ async def _run_debate(
     framework: str | None,
     deep_mode: bool,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> None:
     """Execute bull vs. bear debate with interactive pause points."""
     from bullsh.agent.debate import DebateCoordinator, DebateRefused
@@ -1304,6 +1553,27 @@ async def _run_debate(
         # Show token usage
         console.print(f"\n[dim]Debate complete. Tokens used: {coordinator.state.tokens_used:,}[/dim]")
 
+        # Show suggestions and tips after debate
+        if suggestion_engine and suggestion_state:
+            context = SuggestionContext(
+                action="debate",
+                tickers=[ticker],
+                framework=framework,
+                message_count=len(session.messages),
+            )
+
+            # Show tip (if applicable)
+            if tip_engine:
+                tip = tip_engine.get_tip(context)
+                if tip:
+                    console.print(format_tip(tip))
+
+            # Show suggestions
+            suggestions = suggestion_engine.get_suggestions(context)
+            if suggestions:
+                suggestion_state.set_suggestions(suggestions)
+                console.print(format_suggestions(suggestions))
+
     except DebateRefused as e:
         console.print(f"\n[red]{e}[/red]")
     except Exception as e:
@@ -1315,6 +1585,11 @@ async def _execute_agent_query(
     session: Session,
     prompt: str,
     framework: str | None,
+    *,
+    action: str = "conversation",
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> None:
     """Execute a query through the agent and save to session."""
     session_manager = get_session_manager()
@@ -1333,6 +1608,27 @@ async def _execute_agent_query(
         session.add_message("user", prompt)
         session.add_message("assistant", response_text)
         session_manager.save(session)
+
+        # Show suggestions and tips if engines provided
+        if suggestion_engine and suggestion_state:
+            context = SuggestionContext(
+                action=action,
+                tickers=session.tickers.copy(),
+                framework=framework,
+                message_count=len(session.messages),
+            )
+
+            # Show tip (if applicable)
+            if tip_engine:
+                tip = tip_engine.get_tip(context)
+                if tip:
+                    console.print(format_tip(tip))
+
+            # Show suggestions
+            suggestions = suggestion_engine.get_suggestions(context)
+            if suggestions:
+                suggestion_state.set_suggestions(suggestions)
+                console.print(format_suggestions(suggestions))
 
     except TokenLimitExceeded as e:
         console.print(f"\n[bold red]Token limit exceeded:[/bold red] {e}")
@@ -1388,6 +1684,10 @@ async def _handle_slash_command(
     session: Session,
     current_framework: str | None,
     config: Config,
+    *,
+    suggestion_engine: SuggestionEngine | None = None,
+    tip_engine: TipEngine | None = None,
+    suggestion_state: SuggestionState | None = None,
 ) -> str | None:
     """
     Handle slash commands.
@@ -1468,6 +1768,77 @@ async def _handle_slash_command(
                 console.print(f"[red]Error: {e}[/red]")
                 return None
 
+        case "/research":
+            # Parse: /research TICKER [--framework piotroski]
+            parts = args.split() if args else []
+            if not parts:
+                console.print("[red]Usage: /research <TICKER> [--framework <name>][/red]")
+                return None
+
+            ticker = parts[0].upper()
+            framework_override = current_framework
+
+            # Parse --framework flag
+            for i, part in enumerate(parts):
+                if part in ("--framework", "-f") and i + 1 < len(parts):
+                    framework_override = parts[i + 1]
+
+            await _run_research(
+                orchestrator, session, ticker, framework_override, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
+            return None
+
+        case "/compare":
+            # Parse: /compare T1 T2 [T3] [--framework piotroski]
+            parts = args.split() if args else []
+            # Filter out flags to get tickers
+            tickers = []
+            framework_override = current_framework
+            i = 0
+            while i < len(parts):
+                if parts[i] in ("--framework", "-f") and i + 1 < len(parts):
+                    framework_override = parts[i + 1]
+                    i += 2
+                elif not parts[i].startswith("-"):
+                    tickers.append(parts[i].upper())
+                    i += 1
+                else:
+                    i += 1
+
+            if len(tickers) < 2:
+                console.print("[red]Usage: /compare <TICKER1> <TICKER2> [TICKER3][/red]")
+                return None
+            if len(tickers) > 3:
+                console.print("[red]Maximum 3 tickers for comparison[/red]")
+                return None
+
+            await _run_compare(
+                orchestrator, session, tickers, framework_override, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
+            return None
+
+        case "/thesis":
+            # Parse: /thesis TICKER
+            parts = args.split() if args else []
+            if not parts:
+                console.print("[red]Usage: /thesis <TICKER>[/red]")
+                return None
+
+            ticker = parts[0].upper()
+            await _run_thesis(
+                orchestrator, session, ticker, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
+            return None
+
         case "/debate":
             # Parse: /debate TICKER [--deep] [--framework piotroski]
             parts = args.split() if args else []
@@ -1485,7 +1856,12 @@ async def _handle_slash_command(
                 if part in ("--framework", "-f") and i + 1 < len(parts):
                     framework_override = parts[i + 1]
 
-            await _run_debate(orchestrator, session, ticker, framework_override, deep_mode, config)
+            await _run_debate(
+                orchestrator, session, ticker, framework_override, deep_mode, config,
+                suggestion_engine=suggestion_engine,
+                tip_engine=tip_engine,
+                suggestion_state=suggestion_state,
+            )
             return None
 
         case "/cache":
