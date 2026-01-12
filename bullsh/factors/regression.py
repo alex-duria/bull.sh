@@ -14,15 +14,16 @@ import pandas as pd
 @dataclass
 class RegressionResult:
     """Result of a single factor regression."""
-    alpha: float            # Intercept (abnormal return)
-    alpha_t_stat: float     # t-statistic for alpha
-    betas: dict[str, float] # Factor betas
+
+    alpha: float  # Intercept (abnormal return)
+    alpha_t_stat: float  # t-statistic for alpha
+    betas: dict[str, float]  # Factor betas
     t_stats: dict[str, float]  # t-statistics for betas
     std_errors: dict[str, float]  # Standard errors for betas
-    r_squared: float        # R-squared
-    adj_r_squared: float    # Adjusted R-squared
-    n_observations: int     # Number of observations
-    residual_std: float     # Standard deviation of residuals (idiosyncratic vol)
+    r_squared: float  # R-squared
+    adj_r_squared: float  # Adjusted R-squared
+    n_observations: int  # Number of observations
+    residual_std: float  # Standard deviation of residuals (idiosyncratic vol)
 
 
 def run_factor_regression(
@@ -82,7 +83,7 @@ def run_factor_regression(
     residual_std = np.std(residuals, ddof=k + 1)
 
     # R-squared
-    ss_res = np.sum(residuals ** 2)
+    ss_res = np.sum(residuals**2)
     ss_tot = np.sum((y - np.mean(y)) ** 2)
     r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
     adj_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - k - 1)
@@ -97,8 +98,7 @@ def run_factor_regression(
 
     std_errors = {name: std_errors_all[i + 1] for i, name in enumerate(factor_names)}
     t_stats = {
-        name: betas[name] / std_errors[name] if std_errors[name] > 0 else 0
-        for name in factor_names
+        name: betas[name] / std_errors[name] if std_errors[name] > 0 else 0 for name in factor_names
     }
 
     return RegressionResult(
@@ -146,7 +146,7 @@ def run_rolling_regression(
     rolling_betas["alpha"] = []
 
     for i in range(window, len(common_dates) + 1):
-        window_dates = common_dates[i - window:i]
+        window_dates = common_dates[i - window : i]
         end_date = window_dates[-1]
 
         window_stock = stock_returns.loc[window_dates]
@@ -155,7 +155,9 @@ def run_rolling_regression(
 
         result = run_factor_regression(window_stock, window_factors, window_rf)
         if result:
-            date_str = end_date.strftime("%Y-%m-%d") if hasattr(end_date, "strftime") else str(end_date)
+            date_str = (
+                end_date.strftime("%Y-%m-%d") if hasattr(end_date, "strftime") else str(end_date)
+            )
             rolling_betas["alpha"].append((date_str, result.alpha))
             for name in factor_names:
                 rolling_betas[name].append((date_str, result.betas.get(name, 0)))
@@ -191,25 +193,29 @@ def calculate_variance_decomposition(
     for name in factor_names:
         beta = betas.get(name, 0)
         var = factor_variances.get(name, 0)
-        contribution = (beta ** 2) * var
+        contribution = (beta**2) * var
         systematic_by_factor[name] = contribution
         total_systematic += contribution
 
     # Add covariance terms if provided
     if factor_covariances:
         for i, name_i in enumerate(factor_names):
-            for name_j in factor_names[i + 1:]:
+            for name_j in factor_names[i + 1 :]:
                 beta_i = betas.get(name_i, 0)
                 beta_j = betas.get(name_j, 0)
                 cov = factor_covariances.get((name_i, name_j), 0)
                 cov_contribution = 2 * beta_i * beta_j * cov
                 total_systematic += cov_contribution
                 # Attribute evenly to both factors
-                systematic_by_factor[name_i] = systematic_by_factor.get(name_i, 0) + cov_contribution / 2
-                systematic_by_factor[name_j] = systematic_by_factor.get(name_j, 0) + cov_contribution / 2
+                systematic_by_factor[name_i] = (
+                    systematic_by_factor.get(name_i, 0) + cov_contribution / 2
+                )
+                systematic_by_factor[name_j] = (
+                    systematic_by_factor.get(name_j, 0) + cov_contribution / 2
+                )
 
     # Idiosyncratic variance
-    idio_var = regression_result.residual_std ** 2
+    idio_var = regression_result.residual_std**2
 
     # Total variance
     total_variance = total_systematic + idio_var
@@ -219,8 +225,7 @@ def calculate_variance_decomposition(
 
     # Convert to percentages
     decomposition = {
-        name: (var / total_variance) * 100
-        for name, var in systematic_by_factor.items()
+        name: (var / total_variance) * 100 for name, var in systematic_by_factor.items()
     }
     decomposition["idiosyncratic"] = (idio_var / total_variance) * 100
 
@@ -247,16 +252,12 @@ def calculate_correlations(
     for ticker, history in price_histories.items():
         returns = history.get("returns", [])
         if returns:
-            returns_data[ticker] = pd.Series(
-                {r[0]: r[1] for r in returns}
-            )
+            returns_data[ticker] = pd.Series({r[0]: r[1] for r in returns})
 
     if benchmark_history:
         benchmark_returns = benchmark_history.get("returns", [])
         if benchmark_returns:
-            returns_data["Benchmark"] = pd.Series(
-                {r[0]: r[1] for r in benchmark_returns}
-            )
+            returns_data["Benchmark"] = pd.Series({r[0]: r[1] for r in benchmark_returns})
 
     if len(returns_data) < 2:
         return {}
@@ -270,10 +271,7 @@ def calculate_correlations(
     # Convert to nested dict
     result = {}
     for col in corr_matrix.columns:
-        result[col] = {
-            row: float(corr_matrix.loc[row, col])
-            for row in corr_matrix.index
-        }
+        result[col] = {row: float(corr_matrix.loc[row, col]) for row in corr_matrix.index}
 
     return result
 
@@ -313,11 +311,14 @@ def prepare_fama_french_data(
         hml.append(values.get("HML", 0))
         rf.append(values.get("RF", 0))
 
-    factor_df = pd.DataFrame({
-        "Mkt-RF": mkt_rf,
-        "SMB": smb,
-        "HML": hml,
-    }, index=pd.DatetimeIndex(dates))
+    factor_df = pd.DataFrame(
+        {
+            "Mkt-RF": mkt_rf,
+            "SMB": smb,
+            "HML": hml,
+        },
+        index=pd.DatetimeIndex(dates),
+    )
     factor_df = factor_df.sort_index()
 
     rf_series = pd.Series(rf, index=pd.DatetimeIndex(dates)).sort_index()
@@ -381,13 +382,15 @@ def format_regression_result(
         sig = "*" if abs(t_stat) > 1.96 else ""
         lines.append(f"  {factor}: {beta:.3f} (t={t_stat:.2f}){sig}")
 
-    lines.extend([
-        "",
-        f"R-squared: {result.r_squared:.1%}",
-        f"Adjusted R-squared: {result.adj_r_squared:.1%}",
-        f"Observations: {result.n_observations}",
-        f"Residual Std (monthly): {result.residual_std:.2%}",
-        f"Idiosyncratic Vol (annualized): {result.residual_std * np.sqrt(12):.1%}",
-    ])
+    lines.extend(
+        [
+            "",
+            f"R-squared: {result.r_squared:.1%}",
+            f"Adjusted R-squared: {result.adj_r_squared:.1%}",
+            f"Observations: {result.n_observations}",
+            f"Residual Std (monthly): {result.residual_std:.2%}",
+            f"Idiosyncratic Vol (annualized): {result.residual_std * np.sqrt(12):.1%}",
+        ]
+    )
 
     return "\n".join(lines)

@@ -434,22 +434,76 @@ warn_at_token_pct = 0.8
 
 ## Architecture
 
+### Stampede: The Agent Brain
+
+Bull.sh uses **Stampede**, a Plan→Execute→Reflect architecture inspired by autonomous coding agents. Instead of a simple tool loop, Stampede:
+
+1. **Understands** your query (extracts intent, tickers, depth)
+2. **Plans** structured tasks with dependencies
+3. **Executes** tasks in parallel where possible
+4. **Reflects** on completeness (iterates if critical data missing)
+5. **Synthesizes** a coherent response with sources
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   STAMPEDE LOOP                         │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  User Query: "Research Tesla"                           │
+│      ↓                                                  │
+│  [UNDERSTAND] → intent=research, ticker=TSLA, depth=std │
+│      ↓                                                  │
+│  ┌────────────────────────────────────┐                │
+│  │     ITERATION LOOP (max 5)         │                │
+│  │                                    │                │
+│  │  [PLAN] → 4 tasks with deps        │                │
+│  │     ↓                              │                │
+│  │  [EXECUTE] → parallel tool calls   │                │
+│  │     ↓                              │                │
+│  │  [REFLECT] → complete? → exit      │                │
+│  │     ↓                              │                │
+│  │  guidance → back to PLAN           │                │
+│  └────────────────────────────────────┘                │
+│      ↓                                                  │
+│  [SYNTHESIZE] → streaming response with sources         │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- **Smart ticker resolution** — "Tesla" automatically resolves to "TSLA"
+- **Framework-aware planning** — Piotroski analysis generates 9 signal-gathering tasks
+- **Default to complete** — Only iterates if critical data is genuinely missing
+- **Visible progress** — Watch tasks execute in real-time
+
+### File Structure
+
 ```
 bull.sh/
 ├── bullsh/                   # Main package
 │   ├── agent/
-│   │   ├── orchestrator.py   # Main agent loop with tool dispatch
+│   │   ├── orchestrator.py   # Main dispatcher, routes to Stampede
+│   │   ├── stampede/         # 🆕 Plan→Execute→Reflect architecture
+│   │   │   ├── understanding.py  # Query comprehension
+│   │   │   ├── planner.py        # Task decomposition
+│   │   │   ├── executor.py       # Parallel task execution
+│   │   │   ├── reflector.py      # Completeness evaluation
+│   │   │   ├── synthesizer.py    # Response generation
+│   │   │   ├── loop.py           # Main orchestration loop
+│   │   │   └── schemas.py        # Pydantic models
 │   │   ├── base.py           # SubAgent base class
 │   │   ├── research.py       # Single-company research agent
 │   │   ├── compare.py        # Parallel comparison agent
-│   │   ├── debate.py         # Debate coordinator (4-phase orchestration)
-│   │   ├── bull.py           # Bull agent (argues optimistic thesis)
-│   │   ├── bear.py           # Bear agent (argues cautious thesis)
-│   │   └── moderator.py      # Moderator agent (synthesis + scoring)
+│   │   ├── debate.py         # Debate coordinator
+│   │   ├── bull.py           # Bull agent (optimistic thesis)
+│   │   ├── bear.py           # Bear agent (cautious thesis)
+│   │   └── moderator.py      # Moderator agent (synthesis)
 │   ├── tools/
-│   │   ├── base.py           # Tool definitions for Claude
+│   │   ├── base.py           # Tool definitions (16 tools)
 │   │   ├── sec.py            # SEC EDGAR integration
 │   │   ├── yahoo.py          # Yahoo Finance scraping
+│   │   ├── financials.py     # 🆕 Unified financial statements
+│   │   ├── insiders.py       # 🆕 Insider transactions
 │   │   ├── social.py         # StockTwits, Reddit
 │   │   ├── news.py           # DuckDuckGo news/web search
 │   │   ├── rag.py            # Vector search over filings
@@ -466,6 +520,7 @@ bull.sh/
 │   │   ├── intro.py          # Animated intro sequence
 │   │   ├── theme.py          # Color theme
 │   │   ├── formatter.py      # Response formatting
+│   │   ├── suggestions.py    # 🆕 Proactive suggestions
 │   │   └── status.py         # Tool status indicators
 │   ├── cli.py                # Typer CLI entry point
 │   ├── config.py             # Configuration management

@@ -1,6 +1,5 @@
 """Vector database for RAG over SEC filings using DuckDB."""
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +18,7 @@ def _get_duckdb():
     if _duckdb is None:
         try:
             import duckdb
+
             _duckdb = duckdb
         except ImportError:
             raise ImportError("duckdb not installed. Run: pip install duckdb")
@@ -26,6 +26,7 @@ def _get_duckdb():
 
 
 _model_loading_shown = False
+
 
 def _get_embedding_model():
     """Lazy load sentence-transformers model."""
@@ -35,11 +36,13 @@ def _get_embedding_model():
             # Suppress HuggingFace noise during model load
             import os
             import sys
+
             os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
             os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
 
             # Check if model needs download (first time)
             from pathlib import Path
+
             # HuggingFace cache location varies by OS
             hf_cache = os.environ.get("HF_HOME") or os.environ.get("HUGGINGFACE_HUB_CACHE")
             if hf_cache:
@@ -54,16 +57,22 @@ def _get_embedding_model():
                 if cache_dir.exists():
                     model_cached = any(
                         d.name.startswith("models--sentence-transformers--all-MiniLM-L6-v2")
-                        for d in cache_dir.iterdir() if d.is_dir()
+                        for d in cache_dir.iterdir()
+                        if d.is_dir()
                     )
             except (OSError, PermissionError):
                 pass  # Assume not cached if we can't check
 
             if not model_cached and not _model_loading_shown:
                 _model_loading_shown = True
-                print("  ◐ Downloading embedding model (first time only)...", file=sys.stderr, flush=True)
+                print(
+                    "  ◐ Downloading embedding model (first time only)...",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
             from sentence_transformers import SentenceTransformer
+
             # all-MiniLM-L6-v2 is fast and effective (384 dimensions)
             _model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
             log("tools", "Loaded embedding model: all-MiniLM-L6-v2")
@@ -142,7 +151,7 @@ class VectorDB:
         # Check if already indexed
         existing = self.conn.execute(
             "SELECT COUNT(*) FROM filings WHERE ticker = ? AND form = ? AND year = ? AND quarter = ?",
-            [ticker, form, year, quarter]
+            [ticker, form, year, quarter],
         ).fetchone()[0]
 
         if existing > 0:
@@ -166,10 +175,7 @@ class VectorDB:
             for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
         ]
 
-        self.conn.executemany(
-            "INSERT INTO filings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            data
-        )
+        self.conn.executemany("INSERT INTO filings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", data)
 
         log("tools", f"Indexed {len(chunks)} chunks for {ticker} {form} {year}")
         return {"status": "indexed", "chunks": len(chunks)}
@@ -204,13 +210,16 @@ class VectorDB:
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
         # Fetch all matching chunks
-        rows = self.conn.execute(f"""
+        rows = self.conn.execute(
+            f"""
             SELECT chunk_text, ticker, form, year, quarter, embedding, url, filing_date
             FROM filings {where_clause}
-        """, params).fetchall()
+        """,
+            params,
+        ).fetchall()
 
         if not rows:
-            log("tools", f"No indexed filings found for search filters")
+            log("tools", "No indexed filings found for search filters")
             return []
 
         # Extract embeddings and metadata
@@ -248,25 +257,35 @@ class VectorDB:
 
         results = []
         for i in top_indices:
-            results.append({
-                "text": texts[i],
-                "score": float(similarities[i]),
-                **metadata[i],
-            })
+            results.append(
+                {
+                    "text": texts[i],
+                    "score": float(similarities[i]),
+                    **metadata[i],
+                }
+            )
 
-        log("tools", f"Search returned {len(results)} results, top score: {results[0]['score']:.3f}" if results else "No results")
+        log(
+            "tools",
+            f"Search returned {len(results)} results, top score: {results[0]['score']:.3f}"
+            if results
+            else "No results",
+        )
         return results
 
     def list_indexed(self, ticker: str | None = None) -> list[dict[str, Any]]:
         """List all indexed filings, optionally filtered by ticker."""
         if ticker:
-            rows = self.conn.execute("""
+            rows = self.conn.execute(
+                """
                 SELECT DISTINCT ticker, form, year, quarter, COUNT(*) as chunks, MAX(url) as url
                 FROM filings
                 WHERE ticker = ?
                 GROUP BY ticker, form, year, quarter
                 ORDER BY year DESC
-            """, [ticker.upper()]).fetchall()
+            """,
+                [ticker.upper()],
+            ).fetchall()
         else:
             rows = self.conn.execute("""
                 SELECT DISTINCT ticker, form, year, quarter, COUNT(*) as chunks, MAX(url) as url
@@ -291,7 +310,7 @@ class VectorDB:
         """Delete a filing from the index. Returns number of chunks deleted."""
         result = self.conn.execute(
             "DELETE FROM filings WHERE ticker = ? AND form = ? AND year = ? AND quarter = ?",
-            [ticker.upper(), form, year, quarter]
+            [ticker.upper(), form, year, quarter],
         )
         deleted = result.rowcount
         log("tools", f"Deleted {deleted} chunks for {ticker} {form} {year}")
@@ -341,7 +360,7 @@ class VectorDB:
             return False
 
         # Skip chunks that look like pure table of contents
-        lines = stripped.split('\n')
+        lines = stripped.split("\n")
         if len(lines) > 10:
             short_lines = sum(1 for line in lines if len(line.strip()) < 30)
             if short_lines > len(lines) * 0.8:
@@ -365,9 +384,9 @@ class VectorDB:
         unique_filings = self.conn.execute(
             "SELECT COUNT(DISTINCT ticker || form || CAST(year AS VARCHAR)) FROM filings"
         ).fetchone()[0]
-        unique_tickers = self.conn.execute(
-            "SELECT COUNT(DISTINCT ticker) FROM filings"
-        ).fetchone()[0]
+        unique_tickers = self.conn.execute("SELECT COUNT(DISTINCT ticker) FROM filings").fetchone()[
+            0
+        ]
 
         return {
             "total_chunks": total_chunks,
@@ -386,6 +405,7 @@ def get_vectordb() -> VectorDB:
     global _vectordb
     if _vectordb is None:
         from bullsh.config import get_config
+
         config = get_config()
         db_path = config.data_dir / "vectordb" / "filings.db"
         _vectordb = VectorDB(db_path)

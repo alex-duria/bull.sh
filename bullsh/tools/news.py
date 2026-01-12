@@ -4,9 +4,9 @@ import asyncio
 import warnings
 from typing import Any
 
+from bullsh.logging import log
 from bullsh.storage.cache import get_cache
 from bullsh.tools.base import ToolResult, ToolStatus
-from bullsh.logging import log
 
 # Suppress the rename warning
 warnings.filterwarnings("ignore", message=".*duckduckgo_search.*renamed.*")
@@ -15,10 +15,12 @@ warnings.filterwarnings("ignore", message=".*duckduckgo_search.*renamed.*")
 DDGS_AVAILABLE = False
 try:
     from ddgs import DDGS
+
     DDGS_AVAILABLE = True
 except ImportError:
     try:
         from duckduckgo_search import DDGS
+
         DDGS_AVAILABLE = True
     except ImportError:
         pass
@@ -85,13 +87,15 @@ async def search_news(query: str, days_back: int = 30) -> ToolResult:
 
         articles = []
         for r in results:
-            articles.append({
-                "title": r.get("title", ""),
-                "source": r.get("source", "Unknown"),
-                "date": r.get("date", ""),
-                "snippet": r.get("body", "")[:300],
-                "url": r.get("url", ""),
-            })
+            articles.append(
+                {
+                    "title": r.get("title", ""),
+                    "source": r.get("source", "Unknown"),
+                    "date": r.get("date", ""),
+                    "snippet": r.get("body", "")[:300],
+                    "url": r.get("url", ""),
+                }
+            )
 
         result_data = {
             "query": query,
@@ -102,12 +106,17 @@ async def search_news(query: str, days_back: int = 30) -> ToolResult:
         log("tools", f"search_news: Found {len(articles)} articles for '{query}'")
 
         # Cache successful results
-        cache.set("news", query_upper, {
-            "data": result_data,
-            "confidence": 0.8,
-            "status": "success",
-            "source_url": f"https://duckduckgo.com/?q={query}+stock&t=h_&iar=news",
-        }, days_back=days_back)
+        cache.set(
+            "news",
+            query_upper,
+            {
+                "data": result_data,
+                "confidence": 0.8,
+                "status": "success",
+                "source_url": f"https://duckduckgo.com/?q={query}+stock&t=h_&iar=news",
+            },
+            days_back=days_back,
+        )
 
         return ToolResult(
             data=result_data,
@@ -181,9 +190,7 @@ async def web_search(query: str, max_results: int = 10) -> ToolResult:
 
         # Run in executor since DDGS is synchronous
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None, _web_search_sync, query, max_results
-        )
+        results = await loop.run_in_executor(None, _web_search_sync, query, max_results)
 
         if not results:
             log("tools", f"web_search: No results for '{query}'")
@@ -197,11 +204,13 @@ async def web_search(query: str, max_results: int = 10) -> ToolResult:
 
         search_results = []
         for r in results:
-            search_results.append({
-                "title": r.get("title", ""),
-                "url": r.get("href", r.get("link", "")),
-                "snippet": r.get("body", r.get("snippet", ""))[:500],
-            })
+            search_results.append(
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("href", r.get("link", "")),
+                    "snippet": r.get("body", r.get("snippet", ""))[:500],
+                }
+            )
 
         result_data = {
             "query": query,
@@ -212,12 +221,17 @@ async def web_search(query: str, max_results: int = 10) -> ToolResult:
         log("tools", f"web_search: Found {len(search_results)} results for '{query}'")
 
         # Cache successful results
-        cache.set("web_search", cache_key, {
-            "data": result_data,
-            "confidence": 0.7,
-            "status": "success",
-            "source_url": f"https://duckduckgo.com/?q={query}",
-        }, ttl_hours=1)
+        cache.set(
+            "web_search",
+            cache_key,
+            {
+                "data": result_data,
+                "confidence": 0.7,
+                "status": "success",
+                "source_url": f"https://duckduckgo.com/?q={query}",
+            },
+            ttl_hours=1,
+        )
 
         return ToolResult(
             data=result_data,

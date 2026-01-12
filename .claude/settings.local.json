@@ -3,7 +3,10 @@
     "allow": [
       "Bash(cat:*)",
       "WebSearch",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.financialdatasets.ai)",
+      "Bash(python:*)"
     ]
   }
 }

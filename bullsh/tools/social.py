@@ -6,10 +6,9 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup
 
+from bullsh.logging import log
 from bullsh.storage.cache import get_cache
 from bullsh.tools.base import ToolResult, ToolStatus
-from bullsh.logging import log
-
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -63,7 +62,10 @@ async def search_stocktwits(symbol: str) -> ToolResult:
                 )
 
             if resp.status_code != 200:
-                log("tools", f"search_stocktwits: API returned {resp.status_code}, falling back to Reddit")
+                log(
+                    "tools",
+                    f"search_stocktwits: API returned {resp.status_code}, falling back to Reddit",
+                )
                 # Fall back to Reddit if StockTwits fails
                 return await search_reddit(symbol)
 
@@ -75,14 +77,18 @@ async def search_stocktwits(symbol: str) -> ToolResult:
             for msg in data.get("messages", [])[:20]:  # Last 20 messages
                 sentiment = msg.get("entities", {}).get("sentiment", {}).get("basic")
                 if sentiment:
-                    sentiment_counts[sentiment.lower()] = sentiment_counts.get(sentiment.lower(), 0) + 1
+                    sentiment_counts[sentiment.lower()] = (
+                        sentiment_counts.get(sentiment.lower(), 0) + 1
+                    )
 
-                messages.append({
-                    "text": msg.get("body", "")[:200],
-                    "sentiment": sentiment,
-                    "created_at": msg.get("created_at"),
-                    "likes": msg.get("likes", {}).get("total", 0),
-                })
+                messages.append(
+                    {
+                        "text": msg.get("body", "")[:200],
+                        "sentiment": sentiment,
+                        "created_at": msg.get("created_at"),
+                        "likes": msg.get("likes", {}).get("total", 0),
+                    }
+                )
 
             # Calculate overall sentiment
             total = sum(sentiment_counts.values())
@@ -111,12 +117,16 @@ async def search_stocktwits(symbol: str) -> ToolResult:
             confidence = 0.8 if len(messages) >= 10 else 0.5
 
             # Cache successful results
-            cache.set("stocktwits", symbol, {
-                "data": result_data,
-                "confidence": confidence,
-                "status": "success",
-                "source_url": f"https://stocktwits.com/symbol/{symbol}",
-            })
+            cache.set(
+                "stocktwits",
+                symbol,
+                {
+                    "data": result_data,
+                    "confidence": confidence,
+                    "status": "success",
+                    "source_url": f"https://stocktwits.com/symbol/{symbol}",
+                },
+            )
 
             return ToolResult(
                 data=result_data,
@@ -196,13 +206,15 @@ async def search_reddit(
 
                     for post in posts[:3]:
                         post_data = post.get("data", {})
-                        results.append({
-                            "subreddit": sub,
-                            "title": post_data.get("title", "")[:200],
-                            "score": post_data.get("score", 0),
-                            "comments": post_data.get("num_comments", 0),
-                            "url": f"https://reddit.com{post_data.get('permalink', '')}",
-                        })
+                        results.append(
+                            {
+                                "subreddit": sub,
+                                "title": post_data.get("title", "")[:200],
+                                "score": post_data.get("score", 0),
+                                "comments": post_data.get("num_comments", 0),
+                                "url": f"https://reddit.com{post_data.get('permalink', '')}",
+                            }
+                        )
 
                     # Small delay between requests
                     await asyncio.sleep(0.5)
@@ -217,7 +229,12 @@ async def search_reddit(
                 for sub in subreddits[:2]:
                     try:
                         url = f"https://old.reddit.com/r/{sub}/search"
-                        params = {"q": query, "restrict_sr": "on", "sort": "relevance", "t": "month"}
+                        params = {
+                            "q": query,
+                            "restrict_sr": "on",
+                            "sort": "relevance",
+                            "t": "month",
+                        }
                         resp = await client.get(url, params=params, headers=HEADERS, timeout=10)
 
                         if resp.status_code != 200:
@@ -227,12 +244,14 @@ async def search_reddit(
                         for post in soup.select(".thing.link")[:3]:
                             title_el = post.select_one("a.title")
                             if title_el:
-                                results.append({
-                                    "subreddit": sub,
-                                    "title": title_el.text.strip()[:200],
-                                    "score": "?",
-                                    "comments": "?",
-                                })
+                                results.append(
+                                    {
+                                        "subreddit": sub,
+                                        "title": title_el.text.strip()[:200],
+                                        "score": "?",
+                                        "comments": "?",
+                                    }
+                                )
                         await asyncio.sleep(0.5)
                     except Exception:
                         continue
@@ -244,7 +263,7 @@ async def search_reddit(
                     status=ToolStatus.FAILED,
                     tool_name="search_reddit",
                     ticker=query_upper,
-                    error_message=f"No results found",
+                    error_message="No results found",
                 )
 
             result_data = {
@@ -255,12 +274,16 @@ async def search_reddit(
             }
 
             # Cache successful results
-            cache.set("reddit", query_upper, {
-                "data": result_data,
-                "confidence": 0.6,
-                "status": "success",
-                "source_url": f"https://www.reddit.com/search/?q={query}",
-            })
+            cache.set(
+                "reddit",
+                query_upper,
+                {
+                    "data": result_data,
+                    "confidence": 0.6,
+                    "status": "success",
+                    "source_url": f"https://www.reddit.com/search/?q={query}",
+                },
+            )
 
             return ToolResult(
                 data=result_data,

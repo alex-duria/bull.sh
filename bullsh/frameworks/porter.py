@@ -7,6 +7,7 @@ from typing import Any
 
 class ForceStrength(Enum):
     """Strength rating for each force."""
+
     LOW = "LOW"
     MODERATE = "MODERATE"
     HIGH = "HIGH"
@@ -16,6 +17,7 @@ class ForceStrength(Enum):
 @dataclass
 class ForceAnalysis:
     """Analysis of a single competitive force."""
+
     force_id: str
     name: str
     strength: ForceStrength
@@ -48,6 +50,7 @@ class ForceAnalysis:
 @dataclass
 class FivesForcesResult:
     """Result of Five Forces analysis."""
+
     ticker: str
     forces: dict[str, ForceAnalysis] = field(default_factory=dict)
 
@@ -57,8 +60,12 @@ class FivesForcesResult:
         if not self.forces:
             return "Unknown"
 
-        low_count = sum(1 for f in self.forces.values() if f.effective_strength == ForceStrength.LOW)
-        high_count = sum(1 for f in self.forces.values() if f.effective_strength == ForceStrength.HIGH)
+        low_count = sum(
+            1 for f in self.forces.values() if f.effective_strength == ForceStrength.LOW
+        )
+        high_count = sum(
+            1 for f in self.forces.values() if f.effective_strength == ForceStrength.HIGH
+        )
 
         if low_count >= 4:
             return "Highly Attractive (strong moat)"
@@ -85,16 +92,35 @@ class FivesForcesResult:
 FORCE_KEYWORDS = {
     "threat_new_entrants": {
         "high": ["low barriers", "easy entry", "new competitors", "fragmented market"],
-        "low": ["high barriers", "regulatory approval", "significant capital", "proprietary", "patents", "licenses required"],
+        "low": [
+            "high barriers",
+            "regulatory approval",
+            "significant capital",
+            "proprietary",
+            "patents",
+            "licenses required",
+        ],
         "evidence_sections": ["business", "competition", "risk_factors"],
     },
     "supplier_power": {
-        "high": ["sole supplier", "single source", "supplier concentration", "few suppliers", "dependent on"],
+        "high": [
+            "sole supplier",
+            "single source",
+            "supplier concentration",
+            "few suppliers",
+            "dependent on",
+        ],
         "low": ["multiple suppliers", "commodity", "readily available", "diverse supplier base"],
         "evidence_sections": ["business", "risk_factors", "supply"],
     },
     "buyer_power": {
-        "high": ["customer concentration", "top customers", "major customers", "price sensitive", "commoditized"],
+        "high": [
+            "customer concentration",
+            "top customers",
+            "major customers",
+            "price sensitive",
+            "commoditized",
+        ],
         "low": ["diversified customer", "switching costs", "loyal customers", "differentiated"],
         "evidence_sections": ["business", "risk_factors", "customers"],
     },
@@ -104,8 +130,21 @@ FORCE_KEYWORDS = {
         "evidence_sections": ["business", "competition", "risk_factors"],
     },
     "competitive_rivalry": {
-        "high": ["intense competition", "price competition", "many competitors", "low growth", "commoditized"],
-        "low": ["market leader", "limited competition", "differentiated", "growing market", "duopoly", "oligopoly"],
+        "high": [
+            "intense competition",
+            "price competition",
+            "many competitors",
+            "low growth",
+            "commoditized",
+        ],
+        "low": [
+            "market leader",
+            "limited competition",
+            "differentiated",
+            "growing market",
+            "duopoly",
+            "oligopoly",
+        ],
         "evidence_sections": ["business", "competition"],
     },
 }

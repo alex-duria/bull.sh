@@ -13,6 +13,7 @@ from bullsh.config import get_config
 @dataclass
 class Message:
     """A single message in a conversation."""
+
     role: str  # "user" or "assistant"
     content: str
     timestamp: str  # ISO format
@@ -37,6 +38,7 @@ class Message:
 @dataclass
 class Session:
     """A research session with conversation history."""
+
     id: str
     name: str  # Human-readable name (inferred or user-set)
     tickers: list[str]  # Primary tickers being researched
@@ -82,7 +84,7 @@ class Session:
         messages = self.messages
         if max_messages and len(messages) > max_messages:
             # Keep first message (context) and last N-1 messages
-            messages = [messages[0]] + messages[-(max_messages - 1):]
+            messages = [messages[0]] + messages[-(max_messages - 1) :]
 
         return [m.to_api_format() for m in messages]
 
@@ -224,17 +226,19 @@ class SessionManager:
                 if framework and data.get("framework") != framework:
                     continue
 
-                sessions.append({
-                    "id": data["id"],
-                    "name": data["name"],
-                    "tickers": data.get("tickers", []),
-                    "framework": data.get("framework"),
-                    "created_at": data["created_at"],
-                    "updated_at": data["updated_at"],
-                    "message_count": len(data.get("messages", [])),
-                    "summary": data.get("summary", ""),
-                    "preview": data.get("summary", "")[:100] or "...",
-                })
+                sessions.append(
+                    {
+                        "id": data["id"],
+                        "name": data["name"],
+                        "tickers": data.get("tickers", []),
+                        "framework": data.get("framework"),
+                        "created_at": data["created_at"],
+                        "updated_at": data["updated_at"],
+                        "message_count": len(data.get("messages", [])),
+                        "summary": data.get("summary", ""),
+                        "preview": data.get("summary", "")[:100] or "...",
+                    }
+                )
             except (json.JSONDecodeError, KeyError):
                 continue  # Skip invalid session files
 
@@ -256,9 +260,9 @@ class SessionManager:
                 # Search in name, tickers, and messages
                 matches = False
 
-                if query_lower in data.get("name", "").lower():
-                    matches = True
-                elif any(query_lower in t.lower() for t in data.get("tickers", [])):
+                if query_lower in data.get("name", "").lower() or any(
+                    query_lower in t.lower() for t in data.get("tickers", [])
+                ):
                     matches = True
                 else:
                     for msg in data.get("messages", []):
@@ -267,12 +271,14 @@ class SessionManager:
                             break
 
                 if matches:
-                    results.append({
-                        "id": data["id"],
-                        "name": data["name"],
-                        "tickers": data.get("tickers", []),
-                        "updated_at": data["updated_at"],
-                    })
+                    results.append(
+                        {
+                            "id": data["id"],
+                            "name": data["name"],
+                            "tickers": data.get("tickers", []),
+                            "updated_at": data["updated_at"],
+                        }
+                    )
 
             except (json.JSONDecodeError, KeyError):
                 continue
@@ -332,7 +338,7 @@ def summarize_conversation(messages: list[Message], max_length: int = 500) -> st
     tickers_mentioned = set()
 
     # Regex for ticker mentions
-    ticker_pattern = re.compile(r'\b[A-Z]{1,5}\b')
+    ticker_pattern = re.compile(r"\b[A-Z]{1,5}\b")
 
     for msg in messages:
         content = msg.content
@@ -340,7 +346,23 @@ def summarize_conversation(messages: list[Message], max_length: int = 500) -> st
         # Find tickers
         potential_tickers = ticker_pattern.findall(content)
         for t in potential_tickers:
-            if len(t) >= 2 and t not in {"I", "A", "THE", "AND", "OR", "FOR", "TO", "IN", "ON", "AT", "IS", "IT", "AS", "BY", "BE"}:
+            if len(t) >= 2 and t not in {
+                "I",
+                "A",
+                "THE",
+                "AND",
+                "OR",
+                "FOR",
+                "TO",
+                "IN",
+                "ON",
+                "AT",
+                "IS",
+                "IT",
+                "AS",
+                "BY",
+                "BE",
+            }:
                 tickers_mentioned.add(t)
 
         if msg.role == "user":
@@ -353,7 +375,10 @@ def summarize_conversation(messages: list[Message], max_length: int = 500) -> st
             # Look for findings (sentences with key words)
             sentences = content.split(".")
             for sent in sentences[:3]:  # First few sentences
-                if any(kw in sent.lower() for kw in ["found", "shows", "indicates", "suggests", "analysis"]):
+                if any(
+                    kw in sent.lower()
+                    for kw in ["found", "shows", "indicates", "suggests", "analysis"]
+                ):
                     if len(sent) > 20:
                         key_findings.append(sent.strip()[:150])
 

@@ -1,33 +1,36 @@
 """Export tools for PDF and DOCX generation."""
 
+from __future__ import annotations
+
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from bullsh.config import get_config
-from bullsh.tools.base import ToolResult, ToolStatus
 from bullsh.logging import log
-
+from bullsh.tools.base import ToolResult, ToolStatus
 
 # Check for optional dependencies
 REPORTLAB_AVAILABLE = False
 DOCX_AVAILABLE = False
 
 try:
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
     REPORTLAB_AVAILABLE = True
 except ImportError:
     pass
 
 try:
     from docx import Document
-    from docx.shared import Inches, Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
+
     DOCX_AVAILABLE = True
 except ImportError:
     pass
@@ -44,57 +47,57 @@ def _get_exports_dir() -> Path:
 def _parse_markdown(content: str) -> list[dict[str, Any]]:
     """Parse markdown content into structured elements."""
     elements = []
-    lines = content.split('\n')
+    lines = content.split("\n")
     current_para = []
 
     for line in lines:
         # Headers
-        if line.startswith('# '):
+        if line.startswith("# "):
             if current_para:
-                elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+                elements.append({"type": "paragraph", "text": " ".join(current_para)})
                 current_para = []
-            elements.append({'type': 'h1', 'text': line[2:].strip()})
-        elif line.startswith('## '):
+            elements.append({"type": "h1", "text": line[2:].strip()})
+        elif line.startswith("## "):
             if current_para:
-                elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+                elements.append({"type": "paragraph", "text": " ".join(current_para)})
                 current_para = []
-            elements.append({'type': 'h2', 'text': line[3:].strip()})
-        elif line.startswith('### '):
+            elements.append({"type": "h2", "text": line[3:].strip()})
+        elif line.startswith("### "):
             if current_para:
-                elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+                elements.append({"type": "paragraph", "text": " ".join(current_para)})
                 current_para = []
-            elements.append({'type': 'h3', 'text': line[4:].strip()})
+            elements.append({"type": "h3", "text": line[4:].strip()})
         # Bullet points
-        elif line.strip().startswith('- ') or line.strip().startswith('* '):
+        elif line.strip().startswith("- ") or line.strip().startswith("* "):
             if current_para:
-                elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+                elements.append({"type": "paragraph", "text": " ".join(current_para)})
                 current_para = []
-            elements.append({'type': 'bullet', 'text': line.strip()[2:]})
+            elements.append({"type": "bullet", "text": line.strip()[2:]})
         # Table rows
-        elif '|' in line and not line.strip().startswith('|--'):
+        elif "|" in line and not line.strip().startswith("|--"):
             if current_para:
-                elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+                elements.append({"type": "paragraph", "text": " ".join(current_para)})
                 current_para = []
-            cells = [c.strip() for c in line.split('|') if c.strip()]
+            cells = [c.strip() for c in line.split("|") if c.strip()]
             if cells:
-                elements.append({'type': 'table_row', 'cells': cells})
+                elements.append({"type": "table_row", "cells": cells})
         # Empty line
         elif not line.strip():
             if current_para:
-                elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+                elements.append({"type": "paragraph", "text": " ".join(current_para)})
                 current_para = []
         # Regular text
         else:
             # Clean markdown formatting
             clean_line = line.strip()
-            clean_line = re.sub(r'\*\*(.+?)\*\*', r'\1', clean_line)  # Bold
-            clean_line = re.sub(r'\*(.+?)\*', r'\1', clean_line)  # Italic
-            clean_line = re.sub(r'`(.+?)`', r'\1', clean_line)  # Code
+            clean_line = re.sub(r"\*\*(.+?)\*\*", r"\1", clean_line)  # Bold
+            clean_line = re.sub(r"\*(.+?)\*", r"\1", clean_line)  # Italic
+            clean_line = re.sub(r"`(.+?)`", r"\1", clean_line)  # Code
             if clean_line:
                 current_para.append(clean_line)
 
     if current_para:
-        elements.append({'type': 'paragraph', 'text': ' '.join(current_para)})
+        elements.append({"type": "paragraph", "text": " ".join(current_para)})
 
     return elements
 
@@ -130,8 +133,8 @@ async def export_to_pdf(
         exports_dir = _get_exports_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = filename or f"research_{timestamp}.pdf"
-        if not filename.endswith('.pdf'):
-            filename += '.pdf'
+        if not filename.endswith(".pdf"):
+            filename += ".pdf"
         filepath = exports_dir / filename
 
         # Create PDF
@@ -146,42 +149,52 @@ async def export_to_pdf(
 
         # Styles
         styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(
-            name='CustomTitle',
-            parent=styles['Title'],
-            fontSize=18,
-            spaceAfter=30,
-        ))
-        styles.add(ParagraphStyle(
-            name='CustomH2',
-            parent=styles['Heading2'],
-            fontSize=14,
-            spaceBefore=20,
-            spaceAfter=10,
-        ))
-        styles.add(ParagraphStyle(
-            name='CustomH3',
-            parent=styles['Heading3'],
-            fontSize=12,
-            spaceBefore=15,
-            spaceAfter=8,
-        ))
-        styles.add(ParagraphStyle(
-            name='CustomBody',
-            parent=styles['Normal'],
-            fontSize=10,
-            spaceBefore=6,
-            spaceAfter=6,
-        ))
-        styles.add(ParagraphStyle(
-            name='CustomBullet',
-            parent=styles['Normal'],
-            fontSize=10,
-            leftIndent=20,
-            bulletIndent=10,
-            spaceBefore=3,
-            spaceAfter=3,
-        ))
+        styles.add(
+            ParagraphStyle(
+                name="CustomTitle",
+                parent=styles["Title"],
+                fontSize=18,
+                spaceAfter=30,
+            )
+        )
+        styles.add(
+            ParagraphStyle(
+                name="CustomH2",
+                parent=styles["Heading2"],
+                fontSize=14,
+                spaceBefore=20,
+                spaceAfter=10,
+            )
+        )
+        styles.add(
+            ParagraphStyle(
+                name="CustomH3",
+                parent=styles["Heading3"],
+                fontSize=12,
+                spaceBefore=15,
+                spaceAfter=8,
+            )
+        )
+        styles.add(
+            ParagraphStyle(
+                name="CustomBody",
+                parent=styles["Normal"],
+                fontSize=10,
+                spaceBefore=6,
+                spaceAfter=6,
+            )
+        )
+        styles.add(
+            ParagraphStyle(
+                name="CustomBullet",
+                parent=styles["Normal"],
+                fontSize=10,
+                leftIndent=20,
+                bulletIndent=10,
+                spaceBefore=3,
+                spaceAfter=3,
+            )
+        )
 
         # Parse content
         elements_data = _parse_markdown(content)
@@ -189,46 +202,48 @@ async def export_to_pdf(
 
         # Add title if provided
         if title:
-            story.append(Paragraph(title, styles['CustomTitle']))
+            story.append(Paragraph(title, styles["CustomTitle"]))
             story.append(Spacer(1, 12))
 
         # Add generation info
-        story.append(Paragraph(
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} | bullsh Investment Research",
-            styles['Normal']
-        ))
+        story.append(
+            Paragraph(
+                f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} | bullsh Investment Research",
+                styles["Normal"],
+            )
+        )
         story.append(Spacer(1, 20))
 
         # Process elements
         table_rows = []
         for elem in elements_data:
-            if elem['type'] == 'h1':
+            if elem["type"] == "h1":
                 if table_rows:
                     story.append(_create_pdf_table(table_rows))
                     table_rows = []
-                story.append(Paragraph(elem['text'], styles['CustomTitle']))
-            elif elem['type'] == 'h2':
+                story.append(Paragraph(elem["text"], styles["CustomTitle"]))
+            elif elem["type"] == "h2":
                 if table_rows:
                     story.append(_create_pdf_table(table_rows))
                     table_rows = []
-                story.append(Paragraph(elem['text'], styles['CustomH2']))
-            elif elem['type'] == 'h3':
+                story.append(Paragraph(elem["text"], styles["CustomH2"]))
+            elif elem["type"] == "h3":
                 if table_rows:
                     story.append(_create_pdf_table(table_rows))
                     table_rows = []
-                story.append(Paragraph(elem['text'], styles['CustomH3']))
-            elif elem['type'] == 'bullet':
+                story.append(Paragraph(elem["text"], styles["CustomH3"]))
+            elif elem["type"] == "bullet":
                 if table_rows:
                     story.append(_create_pdf_table(table_rows))
                     table_rows = []
-                story.append(Paragraph(f"• {elem['text']}", styles['CustomBullet']))
-            elif elem['type'] == 'paragraph':
+                story.append(Paragraph(f"• {elem['text']}", styles["CustomBullet"]))
+            elif elem["type"] == "paragraph":
                 if table_rows:
                     story.append(_create_pdf_table(table_rows))
                     table_rows = []
-                story.append(Paragraph(elem['text'], styles['CustomBody']))
-            elif elem['type'] == 'table_row':
-                table_rows.append(elem['cells'])
+                story.append(Paragraph(elem["text"], styles["CustomBody"]))
+            elif elem["type"] == "table_row":
+                table_rows.append(elem["cells"])
 
         # Flush remaining table
         if table_rows:
@@ -273,24 +288,28 @@ def _create_pdf_table(rows: list[list[str]]) -> Table:
     # Pad rows to same length
     padded_rows = []
     for row in rows:
-        padded = row + [''] * (num_cols - len(row))
+        padded = row + [""] * (num_cols - len(row))
         padded_rows.append(padded)
 
     table = Table(padded_rows, colWidths=[col_width] * num_cols)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 1), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
     return table
 
 
@@ -325,8 +344,8 @@ async def export_to_docx(
         exports_dir = _get_exports_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = filename or f"research_{timestamp}.docx"
-        if not filename.endswith('.docx'):
-            filename += '.docx'
+        if not filename.endswith(".docx"):
+            filename += ".docx"
         filepath = exports_dir / filename
 
         # Create document
@@ -351,33 +370,33 @@ async def export_to_docx(
         table_rows = []
 
         for elem in elements:
-            if elem['type'] == 'h1':
+            if elem["type"] == "h1":
                 if table_rows:
                     _add_docx_table(doc, table_rows)
                     table_rows = []
-                doc.add_heading(elem['text'], level=1)
-            elif elem['type'] == 'h2':
+                doc.add_heading(elem["text"], level=1)
+            elif elem["type"] == "h2":
                 if table_rows:
                     _add_docx_table(doc, table_rows)
                     table_rows = []
-                doc.add_heading(elem['text'], level=2)
-            elif elem['type'] == 'h3':
+                doc.add_heading(elem["text"], level=2)
+            elif elem["type"] == "h3":
                 if table_rows:
                     _add_docx_table(doc, table_rows)
                     table_rows = []
-                doc.add_heading(elem['text'], level=3)
-            elif elem['type'] == 'bullet':
+                doc.add_heading(elem["text"], level=3)
+            elif elem["type"] == "bullet":
                 if table_rows:
                     _add_docx_table(doc, table_rows)
                     table_rows = []
-                doc.add_paragraph(elem['text'], style='List Bullet')
-            elif elem['type'] == 'paragraph':
+                doc.add_paragraph(elem["text"], style="List Bullet")
+            elif elem["type"] == "paragraph":
                 if table_rows:
                     _add_docx_table(doc, table_rows)
                     table_rows = []
-                doc.add_paragraph(elem['text'])
-            elif elem['type'] == 'table_row':
-                table_rows.append(elem['cells'])
+                doc.add_paragraph(elem["text"])
+            elif elem["type"] == "table_row":
+                table_rows.append(elem["cells"])
 
         # Flush remaining table
         if table_rows:
@@ -410,14 +429,14 @@ async def export_to_docx(
         )
 
 
-def _add_docx_table(doc: "Document", rows: list[list[str]]) -> None:
+def _add_docx_table(doc: Document, rows: list[list[str]]) -> None:
     """Add a table to a DOCX document."""
     if not rows:
         return
 
     num_cols = max(len(row) for row in rows)
     table = doc.add_table(rows=len(rows), cols=num_cols)
-    table.style = 'Table Grid'
+    table.style = "Table Grid"
 
     for i, row in enumerate(rows):
         for j, cell in enumerate(row):
@@ -453,8 +472,8 @@ async def export_to_markdown(
         exports_dir = _get_exports_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = filename or f"research_{timestamp}.md"
-        if not filename.endswith('.md'):
-            filename += '.md'
+        if not filename.endswith(".md"):
+            filename += ".md"
         filepath = exports_dir / filename
 
         # Build content with optional title
@@ -466,7 +485,7 @@ async def export_to_markdown(
         output += content
 
         # Write file
-        filepath.write_text(output, encoding='utf-8')
+        filepath.write_text(output, encoding="utf-8")
 
         log("tools", f"export_to_markdown: Saved to {filepath}")
 
@@ -510,13 +529,13 @@ async def export_content(
     Returns:
         ToolResult with path to generated file
     """
-    format = format.lower().lstrip('.')
+    format = format.lower().lstrip(".")
 
-    if format in ('md', 'markdown'):
+    if format in ("md", "markdown"):
         return await export_to_markdown(content, filename, title)
-    elif format == 'pdf':
+    elif format == "pdf":
         return await export_to_pdf(content, filename, title)
-    elif format in ('docx', 'doc'):
+    elif format in ("docx", "doc"):
         return await export_to_docx(content, filename, title)
     else:
         return ToolResult(

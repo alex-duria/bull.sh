@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from bullsh.agent.base import SubAgent, AgentResult
+from bullsh.agent.base import AgentResult, SubAgent
 from bullsh.config import Config
-from bullsh.tools.base import get_tools_for_claude
 from bullsh.logging import log
+from bullsh.tools.base import get_tools_for_claude
 
 
 class ResearchAgent(SubAgent):
@@ -58,8 +58,11 @@ Output format:
         all_tools = get_tools_for_claude()
         # Filter to research-relevant tools
         research_tools = [
-            "sec_search", "sec_fetch", "rag_search",
-            "scrape_yahoo", "compute_ratios",
+            "sec_search",
+            "sec_fetch",
+            "rag_search",
+            "scrape_yahoo",
+            "compute_ratios",
         ]
         if self.include_social:
             research_tools.extend(["search_stocktwits", "search_news"])
@@ -104,7 +107,10 @@ Output format:
 
                 # No more tool calls - we're done
                 if not tool_uses:
-                    log("agent", f"ResearchAgent completed with {len(self.tool_results)} tool results")
+                    log(
+                        "agent",
+                        f"ResearchAgent completed with {len(self.tool_results)} tool results",
+                    )
                     return AgentResult(
                         content=text_content,
                         tool_results=self.tool_results,
@@ -117,21 +123,27 @@ Output format:
                 tool_results = []
                 for tool_use in tool_uses:
                     result = await self._execute_tool(tool_use.name, tool_use.input)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": self._format_tool_result(result),
-                    })
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use.id,
+                            "content": self._format_tool_result(result),
+                        }
+                    )
 
                 # Update messages for next iteration
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content,
-                })
-                messages.append({
-                    "role": "user",
-                    "content": tool_results,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content,
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": tool_results,
+                    }
+                )
 
             # Max iterations reached
             log("agent", f"ResearchAgent hit max iterations for {ticker}")

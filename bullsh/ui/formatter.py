@@ -21,8 +21,8 @@ def format_agent_response(content: str) -> Text:
     - Good whitespace and wrapping
     """
     # Clean up any tool status remnants
-    content = re.sub(r'^[◐◑◒◓✓✗].*$', '', content, flags=re.MULTILINE)
-    content = re.sub(r'^\[Data gathered.*\]$', '', content, flags=re.MULTILINE)
+    content = re.sub(r"^[◐◑◒◓✓✗].*$", "", content, flags=re.MULTILINE)
+    content = re.sub(r"^\[Data gathered.*\]$", "", content, flags=re.MULTILINE)
 
     lines = content.split("\n")
     output_parts = []
@@ -82,7 +82,7 @@ def format_agent_response(content: str) -> Text:
             continue
 
         # Bold line that acts as a header: **Something**
-        bold_header_match = re.match(r'^\*\*([^*]+)\*\*:?\s*$', stripped)
+        bold_header_match = re.match(r"^\*\*([^*]+)\*\*:?\s*$", stripped)
         if bold_header_match:
             header_text = bold_header_match.group(1)
             output_parts.append(_render_h3(header_text))
@@ -92,14 +92,18 @@ def format_agent_response(content: str) -> Text:
             continue
 
         # Numbered list: 1. Item or 1) Item
-        num_match = re.match(r'^(\d+)[.\)]\s+(.+)$', stripped)
+        num_match = re.match(r"^(\d+)[.\)]\s+(.+)$", stripped)
         if num_match:
             num = int(num_match.group(1))
             item_text = num_match.group(2)
 
             # Collect continuation lines (indented text that's part of same item)
             j = i + 1
-            while j < len(lines) and lines[j].startswith("   ") and not re.match(r'^\s*\d+[.\)]\s', lines[j]):
+            while (
+                j < len(lines)
+                and lines[j].startswith("   ")
+                and not re.match(r"^\s*\d+[.\)]\s", lines[j])
+            ):
                 item_text += " " + lines[j].strip()
                 j += 1
 
@@ -109,13 +113,17 @@ def format_agent_response(content: str) -> Text:
             continue
 
         # Bullet list: - Item or * Item or • Item
-        bullet_match = re.match(r'^[-*•]\s+(.+)$', stripped)
+        bullet_match = re.match(r"^[-*•]\s+(.+)$", stripped)
         if bullet_match:
             item_text = bullet_match.group(1)
 
             # Collect continuation lines
             j = i + 1
-            while j < len(lines) and lines[j].startswith("   ") and not re.match(r'^\s*[-*•]\s', lines[j]):
+            while (
+                j < len(lines)
+                and lines[j].startswith("   ")
+                and not re.match(r"^\s*[-*•]\s", lines[j])
+            ):
                 item_text += " " + lines[j].strip()
                 j += 1
 
@@ -139,7 +147,7 @@ def format_agent_response(content: str) -> Text:
             continue
 
         # Horizontal rule: --- or ***
-        if stripped in ("---", "***", "___") or re.match(r'^[-*_]{3,}$', stripped):
+        if stripped in ("---", "***", "___") or re.match(r"^[-*_]{3,}$", stripped):
             rule = Text()
             rule.append("  " + "─" * 50, style=COLORS["muted"])
             output_parts.append(rule)
@@ -232,18 +240,18 @@ def _process_inline_formatting(text: str) -> Text:
     i = 0
     while i < len(text):
         # Check for **bold**
-        if text[i:i+2] == "**":
+        if text[i : i + 2] == "**":
             end = text.find("**", i + 2)
             if end != -1:
-                output.append(text[i+2:end], style="bold")
+                output.append(text[i + 2 : end], style="bold")
                 i = end + 2
                 continue
 
         # Check for *italic* (but not **)
-        if text[i] == "*" and (i + 1 >= len(text) or text[i+1] != "*"):
+        if text[i] == "*" and (i + 1 >= len(text) or text[i + 1] != "*"):
             end = text.find("*", i + 1)
-            if end != -1 and text[end-1:end+1] != "**":
-                output.append(text[i+1:end], style="italic")
+            if end != -1 and text[end - 1 : end + 1] != "**":
+                output.append(text[i + 1 : end], style="italic")
                 i = end + 1
                 continue
 
@@ -251,7 +259,7 @@ def _process_inline_formatting(text: str) -> Text:
         if text[i] == "`":
             end = text.find("`", i + 1)
             if end != -1:
-                output.append(text[i+1:end], style=f"bold {COLORS['secondary']}")
+                output.append(text[i + 1 : end], style=f"bold {COLORS['secondary']}")
                 i = end + 1
                 continue
 
@@ -259,9 +267,18 @@ def _process_inline_formatting(text: str) -> Text:
         if text[i] == "(":
             end = text.find(")", i + 1)
             if end != -1:
-                citation = text[i+1:end]
+                citation = text[i + 1 : end]
                 # Check if it looks like a source citation
-                source_keywords = ["SEC", "filing", "Yahoo", "source", "analyst", "10-K", "10-Q", "report"]
+                source_keywords = [
+                    "SEC",
+                    "filing",
+                    "Yahoo",
+                    "source",
+                    "analyst",
+                    "10-K",
+                    "10-Q",
+                    "report",
+                ]
                 if any(kw.lower() in citation.lower() for kw in source_keywords):
                     output.append("(", style=COLORS["muted"])
                     output.append(citation, style=f"italic {COLORS['secondary']} underline")
@@ -270,7 +287,7 @@ def _process_inline_formatting(text: str) -> Text:
                     continue
 
         # Check for percentages and highlight them
-        pct_match = re.match(r'([+-]?\d+\.?\d*%)', text[i:])
+        pct_match = re.match(r"([+-]?\d+\.?\d*%)", text[i:])
         if pct_match:
             pct = pct_match.group(1)
             if pct.startswith("+") or (pct[0].isdigit() and not pct.startswith("-")):
@@ -281,7 +298,7 @@ def _process_inline_formatting(text: str) -> Text:
             continue
 
         # Check for dollar amounts
-        dollar_match = re.match(r'(\$[\d,]+\.?\d*[BMK]?)', text[i:])
+        dollar_match = re.match(r"(\$[\d,]+\.?\d*[BMK]?)", text[i:])
         if dollar_match:
             amount = dollar_match.group(1)
             output.append(amount, style="bold white")
@@ -304,7 +321,7 @@ def _render_table(lines: list[str]) -> Text:
     rows = []
     for line in lines:
         # Skip separator lines (|---|---|)
-        if re.match(r'^\|[\s\-:]+\|$', line.replace("|", "| ").replace("  ", " ")):
+        if re.match(r"^\|[\s\-:]+\|$", line.replace("|", "| ").replace("  ", " ")):
             continue
 
         cells = [c.strip() for c in line.split("|")[1:-1]]  # Remove empty first/last from split
@@ -334,7 +351,6 @@ def _render_table(lines: list[str]) -> Text:
 
         # Render data rows
         for row in rows[1:]:
-            data_line = "  "
             for i, cell in enumerate(row):
                 if i < num_cols:
                     # Apply formatting to cell content
@@ -398,9 +414,9 @@ def format_stock_summary(data: dict) -> Text:
             output.append(f"  {label}: ", style="dim")
             if isinstance(value, (int, float)):
                 if value >= 1_000_000_000:
-                    output.append(f"${value/1e9:.1f}B", style="white")
+                    output.append(f"${value / 1e9:.1f}B", style="white")
                 elif value >= 1_000_000:
-                    output.append(f"${value/1e6:.1f}M", style="white")
+                    output.append(f"${value / 1e6:.1f}M", style="white")
                 elif label in ("P/E",):
                     output.append(f"{value:.1f}", style="white")
                 elif label in ("52W High", "52W Low"):

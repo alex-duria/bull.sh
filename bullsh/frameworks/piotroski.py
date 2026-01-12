@@ -3,12 +3,13 @@
 from dataclasses import dataclass
 from typing import Any
 
-from bullsh.frameworks.base import Framework, load_framework
+from bullsh.frameworks.base import Framework
 
 
 @dataclass
 class FinancialData:
     """Financial data extracted from SEC filings for F-Score calculation."""
+
     # Current year
     net_income: float | None = None
     total_assets: float | None = None
@@ -51,7 +52,11 @@ class FinancialData:
     @property
     def current_ratio_prior(self) -> float | None:
         """Prior year current ratio"""
-        if self.current_assets_prior and self.current_liabilities_prior and self.current_liabilities_prior > 0:
+        if (
+            self.current_assets_prior
+            and self.current_liabilities_prior
+            and self.current_liabilities_prior > 0
+        ):
             return self.current_assets_prior / self.current_liabilities_prior
         return None
 
@@ -87,6 +92,7 @@ class FinancialData:
 @dataclass
 class FScoreResult:
     """Result of F-Score calculation."""
+
     score: int
     max_score: int = 9
     signals: dict[str, bool | None] = None
@@ -112,11 +118,13 @@ class FScoreResult:
         """Format for display as table."""
         rows = []
         for signal_id, passed in self.signals.items():
-            rows.append({
-                "signal": signal_id.replace("_", " ").title(),
-                "result": "✓ Pass" if passed else "✗ Fail" if passed is False else "? Unknown",
-                "detail": self.details.get(signal_id, ""),
-            })
+            rows.append(
+                {
+                    "signal": signal_id.replace("_", " ").title(),
+                    "result": "✓ Pass" if passed else "✗ Fail" if passed is False else "? Unknown",
+                    "detail": self.details.get(signal_id, ""),
+                }
+            )
         return rows
 
 
@@ -264,7 +272,7 @@ def extract_financial_data_from_filing(filing_text: str) -> FinancialData:
                     num = float(num_str)
 
                     # Check for scale indicators
-                    context = text[match.start():match.end() + 20].lower()
+                    context = text[match.start() : match.end() + 20].lower()
                     if "billion" in context or "b" in context.split()[-1:]:
                         num *= 1_000_000_000
                     elif "million" in context or "m" in context.split()[-1:]:
@@ -280,8 +288,7 @@ def extract_financial_data_from_filing(filing_text: str) -> FinancialData:
     data.net_income = find_number(filing_text, ["net income", "net earnings"])
     data.total_assets = find_number(filing_text, ["total assets"])
     data.operating_cash_flow = find_number(
-        filing_text,
-        ["operating activities", "cash from operations", "operating cash flow"]
+        filing_text, ["operating activities", "cash from operations", "operating cash flow"]
     )
     data.revenue = find_number(filing_text, ["total revenue", "net revenue", "total net revenue"])
     data.gross_profit = find_number(filing_text, ["gross profit", "gross margin"])

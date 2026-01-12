@@ -3,8 +3,8 @@
 import asyncio
 from typing import Any
 
-from bullsh.tools.base import ToolResult, ToolStatus
 from bullsh.logging import log
+from bullsh.tools.base import ToolResult, ToolStatus
 
 
 # Lazy import to handle optional dependencies
@@ -12,11 +12,10 @@ def _get_vectordb():
     """Get VectorDB instance, handling missing dependencies."""
     try:
         from bullsh.storage.vectordb import get_vectordb
+
         return get_vectordb()
     except ImportError as e:
-        raise ImportError(
-            "RAG dependencies not installed. Run: pip install bullsh[rag]"
-        ) from e
+        raise ImportError("RAG dependencies not installed. Run: pip install bullsh[rag]") from e
 
 
 async def rag_search(
@@ -70,14 +69,16 @@ async def rag_search(
         # Format results for the agent
         formatted_results = []
         for r in results:
-            formatted_results.append({
-                "text": r["text"],
-                "score": round(r["score"], 3),
-                "ticker": r["ticker"],
-                "form": r["form"],
-                "year": r["year"],
-                "url": r.get("url"),
-            })
+            formatted_results.append(
+                {
+                    "text": r["text"],
+                    "score": round(r["score"], 3),
+                    "ticker": r["ticker"],
+                    "form": r["form"],
+                    "year": r["year"],
+                    "url": r.get("url"),
+                }
+            )
 
         avg_score = sum(r["score"] for r in results) / len(results)
 

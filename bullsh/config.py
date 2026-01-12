@@ -1,16 +1,15 @@
 """Configuration management - loads .env and config.toml."""
 
 import os
+
+# tomli is built into 3.11+, but we support 3.12+ so use tomllib
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-
-# tomli is built into 3.11+, but we support 3.12+ so use tomllib
-import tomllib
 import tomli_w
-
+from dotenv import load_dotenv
 
 # Default values (extracted so they can be referenced before instance creation)
 DEFAULT_KEYBINDINGS = {
@@ -41,6 +40,9 @@ class Config:
     # Required
     anthropic_api_key: str
     edgar_identity: str
+
+    # Optional API keys
+    financial_datasets_api_key: str | None = None
 
     # Optional with defaults
     model: str = DEFAULT_MODEL
@@ -147,6 +149,9 @@ def load_config(env_path: Path | None = None) -> Config:
             "SEC requires identification: 'Your Name your@email.com'"
         )
 
+    # Get optional API keys
+    financial_datasets_key = os.getenv("FINANCIAL_DATASETS_API_KEY")
+
     # Get cost control settings
     cost_config = toml_config.get("cost_controls", {})
 
@@ -154,22 +159,33 @@ def load_config(env_path: Path | None = None) -> Config:
     config = Config(
         anthropic_api_key=api_key,
         edgar_identity=edgar_identity,
-        model=os.getenv("MODEL", toml_config.get("general", {}).get("default_model", DEFAULT_MODEL)),
-        log_level=os.getenv("LOG_LEVEL", toml_config.get("general", {}).get("log_level", DEFAULT_LOG_LEVEL)),
+        financial_datasets_api_key=financial_datasets_key,
+        model=os.getenv(
+            "MODEL", toml_config.get("general", {}).get("default_model", DEFAULT_MODEL)
+        ),
+        log_level=os.getenv(
+            "LOG_LEVEL", toml_config.get("general", {}).get("log_level", DEFAULT_LOG_LEVEL)
+        ),
         verbosity=toml_config.get("general", {}).get("verbosity", DEFAULT_VERBOSITY),
         verbose_tools=toml_config.get("display", {}).get("verbose_tools", DEFAULT_VERBOSE_TOOLS),
         keybindings={
             **DEFAULT_KEYBINDINGS,
             **toml_config.get("keybindings", {}),
         },
-        max_tokens_per_session=cost_config.get("max_tokens_per_session", DEFAULT_MAX_TOKENS_PER_SESSION),
+        max_tokens_per_session=cost_config.get(
+            "max_tokens_per_session", DEFAULT_MAX_TOKENS_PER_SESSION
+        ),
         max_tokens_per_turn=cost_config.get("max_tokens_per_turn", DEFAULT_MAX_TOKENS_PER_TURN),
         warn_at_token_pct=cost_config.get("warn_at_token_pct", DEFAULT_WARN_AT_TOKEN_PCT),
         cost_per_1k_input=cost_config.get("cost_per_1k_input", DEFAULT_COST_PER_1K_INPUT),
         cost_per_1k_output=cost_config.get("cost_per_1k_output", DEFAULT_COST_PER_1K_OUTPUT),
         max_history_messages=cost_config.get("max_history_messages", DEFAULT_MAX_HISTORY_MESSAGES),
-        enable_prompt_caching=cost_config.get("enable_prompt_caching", DEFAULT_ENABLE_PROMPT_CACHING),
-        tool_result_max_chars=cost_config.get("tool_result_max_chars", DEFAULT_TOOL_RESULT_MAX_CHARS),
+        enable_prompt_caching=cost_config.get(
+            "enable_prompt_caching", DEFAULT_ENABLE_PROMPT_CACHING
+        ),
+        tool_result_max_chars=cost_config.get(
+            "tool_result_max_chars", DEFAULT_TOOL_RESULT_MAX_CHARS
+        ),
     )
 
     # Ensure directories exist
@@ -227,6 +243,10 @@ EDGAR_IDENTITY="{edgar_identity}"
 # Optional
 # MODEL=claude-sonnet-4-20250514
 # LOG_LEVEL=info
+
+# Financial Datasets API (optional, enables structured financials and insider transactions)
+# Get your key at: https://financialdatasets.ai/
+# FINANCIAL_DATASETS_API_KEY=fd_your_key_here
 """
     env_path.write_text(env_content)
     return env_path

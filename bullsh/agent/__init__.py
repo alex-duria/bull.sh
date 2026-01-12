@@ -1,13 +1,24 @@
 """Agent module - orchestrator and subagents."""
 
-from bullsh.agent.orchestrator import Orchestrator, TokenLimitExceeded, TokenUsage
-from bullsh.agent.base import SubAgent, AgentResult
-from bullsh.agent.research import ResearchAgent
-from bullsh.agent.compare import CompareAgent
-from bullsh.agent.bull import BullAgent
+from bullsh.agent.base import AgentResult, SubAgent
 from bullsh.agent.bear import BearAgent
+from bullsh.agent.bull import BullAgent
+from bullsh.agent.compare import CompareAgent
+from bullsh.agent.debate import DebateCoordinator, DebatePhase, DebateRefused, DebateState
 from bullsh.agent.moderator import ModeratorAgent, SynthesisResult
-from bullsh.agent.debate import DebateCoordinator, DebatePhase, DebateState, DebateRefused
+from bullsh.agent.orchestrator import Orchestrator, TokenLimitExceeded, TokenUsage
+from bullsh.agent.research import ResearchAgent
+
+# Stampede - next-gen agent architecture
+from bullsh.agent.stampede import (
+    ReflectionResult,
+    StampedeLoop,
+    Task,
+    TaskPlan,
+    TaskResult,
+    Understanding,
+    run_stampede,
+)
 
 __all__ = [
     "Orchestrator",
@@ -26,4 +37,12 @@ __all__ = [
     "DebatePhase",
     "DebateState",
     "DebateRefused",
+    # Stampede
+    "StampedeLoop",
+    "run_stampede",
+    "Understanding",
+    "TaskPlan",
+    "Task",
+    "TaskResult",
+    "ReflectionResult",
 ]

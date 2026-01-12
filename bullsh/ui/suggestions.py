@@ -61,7 +61,7 @@ class SuggestionEngine:
                 command="/framework piotroski",
             ),
             Suggestion(
-                label=f"Generate investment thesis",
+                label="Generate investment thesis",
                 command=f"/thesis {ticker}",
             ),
             Suggestion(
@@ -86,7 +86,7 @@ class SuggestionEngine:
                 command="/export",
             ),
             Suggestion(
-                label=f"Run valuation analysis",
+                label="Run valuation analysis",
                 command="/framework valuation",
             ),
         ]
@@ -136,9 +136,7 @@ class SuggestionEngine:
             ),
         ]
 
-    def _conversation_suggestions(
-        self, tickers: list[str], message_count: int
-    ) -> list[Suggestion]:
+    def _conversation_suggestions(self, tickers: list[str], message_count: int) -> list[Suggestion]:
         """Suggestions after a conversational response."""
         suggestions = []
 
@@ -222,10 +220,7 @@ class TipEngine:
         message_count = context.message_count
 
         # First research tip
-        if (
-            action == "research"
-            and "first_research" not in self.tips_shown
-        ):
+        if action == "research" and "first_research" not in self.tips_shown:
             self.tips_shown.add("first_research")
             return "Use /framework piotroski for quantitative health scoring"
 
@@ -235,20 +230,13 @@ class TipEngine:
             return "Use /export to save this debate summary"
 
         # Multiple tickers tip
-        if (
-            len(tickers) >= 2
-            and "compare_tip" not in self.tips_shown
-        ):
+        if len(tickers) >= 2 and "compare_tip" not in self.tips_shown:
             self.tips_shown.add("compare_tip")
             t1, t2 = tickers[:2]
             return f"Use /compare {t1} {t2} for side-by-side analysis"
 
         # After framework tip
-        if (
-            action == "framework"
-            and framework
-            and "thesis_tip" not in self.tips_shown
-        ):
+        if action == "framework" and framework and "thesis_tip" not in self.tips_shown:
             self.tips_shown.add("thesis_tip")
             return "Use /thesis to generate a full investment thesis"
 

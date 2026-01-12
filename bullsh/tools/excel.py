@@ -2,18 +2,15 @@
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from bullsh.config import get_config
+from bullsh.logging import log
 from bullsh.tools.base import ToolResult, ToolStatus
 from bullsh.tools.yahoo import scrape_yahoo
-from bullsh.logging import log
-
 
 # Styles
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -22,10 +19,10 @@ POSITIVE_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type=
 NEGATIVE_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 NEUTRAL_FILL = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
 BORDER = Border(
-    left=Side(style='thin'),
-    right=Side(style='thin'),
-    top=Side(style='thin'),
-    bottom=Side(style='thin')
+    left=Side(style="thin"),
+    right=Side(style="thin"),
+    top=Side(style="thin"),
+    bottom=Side(style="thin"),
 )
 
 
@@ -61,7 +58,7 @@ def _apply_header_style(ws, row: int, col_start: int, col_end: int) -> None:
         cell = ws.cell(row=row, column=col)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal="center")
         cell.border = BORDER
 
 
@@ -73,7 +70,7 @@ def _auto_column_width(ws) -> None:
         for cell in column_cells:
             try:
                 # Skip merged cells - they don't have column_letter
-                if hasattr(cell, 'column_letter'):
+                if hasattr(cell, "column_letter"):
                     if column is None:
                         column = cell.column_letter
                     if cell.value:
@@ -196,12 +193,12 @@ async def generate_excel(
 def _create_metrics_sheet(ws, ticker_data: dict[str, dict]) -> None:
     """Create the Key Metrics sheet."""
     # Title
-    ws['A1'] = "Key Metrics"
-    ws['A1'].font = Font(bold=True, size=14)
-    ws.merge_cells('A1:E1')
+    ws["A1"] = "Key Metrics"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.merge_cells("A1:E1")
 
-    ws['A2'] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-    ws['A2'].font = Font(italic=True, color="666666")
+    ws["A2"] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    ws["A2"].font = Font(italic=True, color="666666")
 
     # Headers
     row = 4
@@ -227,7 +224,7 @@ def _create_metrics_sheet(ws, ticker_data: dict[str, dict]) -> None:
     # Write headers
     ws.cell(row=row, column=1, value="Metric")
     col = 2
-    for ticker in ticker_data.keys():
+    for ticker in ticker_data:
         ws.cell(row=row, column=col, value=ticker)
         col += 1
     _apply_header_style(ws, row, 1, len(ticker_data) + 1)
@@ -277,7 +274,7 @@ def _create_metrics_sheet(ws, ticker_data: dict[str, dict]) -> None:
                 cell.value = value if value is not None else "N/A"
 
             cell.border = BORDER
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal="right")
             col += 1
 
     _auto_column_width(ws)
@@ -285,13 +282,13 @@ def _create_metrics_sheet(ws, ticker_data: dict[str, dict]) -> None:
 
 def _create_ratios_sheet(ws, ticker_data: dict[str, dict]) -> None:
     """Create the Financial Ratios sheet with formulas."""
-    ws['A1'] = "Financial Ratios"
-    ws['A1'].font = Font(bold=True, size=14)
+    ws["A1"] = "Financial Ratios"
+    ws["A1"].font = Font(bold=True, size=14)
 
     row = 3
     ws.cell(row=row, column=1, value="Ratio")
     col = 2
-    for ticker in ticker_data.keys():
+    for ticker in ticker_data:
         ws.cell(row=row, column=col, value=ticker)
         col += 1
     _apply_header_style(ws, row, 1, len(ticker_data) + 1)
@@ -301,7 +298,7 @@ def _create_ratios_sheet(ws, ticker_data: dict[str, dict]) -> None:
         ("P/E Ratio (TTM)", "pe_ratio"),
         ("Forward P/E", "forward_pe"),
         ("Price to 52W High", None),  # Calculated
-        ("Price to 52W Low", None),   # Calculated
+        ("Price to 52W Low", None),  # Calculated
         ("", None),  # Spacer
         ("Analyst Targets", None),  # Section header
         ("Target Mean Price", "target_mean_price"),
@@ -315,7 +312,11 @@ def _create_ratios_sheet(ws, ticker_data: dict[str, dict]) -> None:
         row += 1
 
         # Section header
-        if ratio_key is None and ratio_name and ratio_name not in ("Price to 52W High", "Price to 52W Low"):
+        if (
+            ratio_key is None
+            and ratio_name
+            and ratio_name not in ("Price to 52W High", "Price to 52W Low")
+        ):
             ws.cell(row=row, column=1, value=ratio_name)
             ws.cell(row=row, column=1).font = Font(bold=True, color="4472C4")
             continue
@@ -352,7 +353,7 @@ def _create_ratios_sheet(ws, ticker_data: dict[str, dict]) -> None:
                     cell.value = value if value else "N/A"
 
             cell.border = BORDER
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal="right")
             col += 1
 
     _auto_column_width(ws)
@@ -360,8 +361,8 @@ def _create_ratios_sheet(ws, ticker_data: dict[str, dict]) -> None:
 
 def _create_comparison_sheet(ws, ticker_data: dict[str, dict]) -> None:
     """Create the Comparison sheet for multiple tickers."""
-    ws['A1'] = "Side-by-Side Comparison"
-    ws['A1'].font = Font(bold=True, size=14)
+    ws["A1"] = "Side-by-Side Comparison"
+    ws["A1"].font = Font(bold=True, size=14)
 
     tickers = list(ticker_data.keys())
 
@@ -407,10 +408,7 @@ def _create_comparison_sheet(ws, ticker_data: dict[str, dict]) -> None:
                 elif "{:.2%}" in fmt:
                     cell.value = f"{value:.2%}" if value else "N/A"
                     values.append((value, ticker))
-                elif "${" in fmt:
-                    cell.value = fmt.format(value)
-                    values.append((value, ticker))
-                elif "{:.2f}" in fmt:
+                elif "${" in fmt or "{:.2f}" in fmt:
                     cell.value = fmt.format(value)
                     values.append((value, ticker))
                 else:
@@ -420,32 +418,32 @@ def _create_comparison_sheet(ws, ticker_data: dict[str, dict]) -> None:
                 cell.value = "N/A"
 
             cell.border = BORDER
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal="right")
 
         # Determine "best" (highest for most metrics, lowest for P/E)
         best_cell = ws.cell(row=row, column=len(tickers) + 2)
         if values:
             if metric_key in ("pe_ratio", "forward_pe"):
                 # Lower is better for P/E
-                best = min(values, key=lambda x: x[0] if x[0] else float('inf'))
+                best = min(values, key=lambda x: x[0] if x[0] else float("inf"))
             elif metric_key == "recommendation":
                 best_cell.value = "-"
             else:
                 # Higher is better
-                best = max(values, key=lambda x: x[0] if x[0] else float('-inf'))
+                best = max(values, key=lambda x: x[0] if x[0] else float("-inf"))
             if metric_key != "recommendation":
                 best_cell.value = best[1]
                 best_cell.fill = POSITIVE_FILL
         best_cell.border = BORDER
-        best_cell.alignment = Alignment(horizontal='center')
+        best_cell.alignment = Alignment(horizontal="center")
 
     _auto_column_width(ws)
 
 
 def _create_valuation_sheet(ws, ticker_data: dict[str, dict]) -> None:
     """Create the Valuation Analysis sheet."""
-    ws['A1'] = "Valuation Analysis"
-    ws['A1'].font = Font(bold=True, size=14)
+    ws["A1"] = "Valuation Analysis"
+    ws["A1"].font = Font(bold=True, size=14)
 
     row = 3
     for ticker, data in ticker_data.items():

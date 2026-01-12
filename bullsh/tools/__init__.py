@@ -1,7 +1,7 @@
 """Tools module - data fetching and analysis tools."""
 
+from bullsh.tools import news, rag, sec, social, thesis, yahoo
 from bullsh.tools.base import ToolResult, ToolStatus, get_tools_for_claude
-from bullsh.tools import sec, yahoo, social, news, thesis, rag
 
 __all__ = [
     "ToolResult",

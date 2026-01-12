@@ -15,11 +15,11 @@ _file_handler: logging.FileHandler | None = None
 
 # Categories for filtering
 CATEGORIES = {
-    "tools",      # Tool calls and results
-    "api",        # Claude API requests/responses
-    "cache",      # Cache hits/misses
-    "session",    # Session management
-    "config",     # Configuration loading
+    "tools",  # Tool calls and results
+    "api",  # Claude API requests/responses
+    "cache",  # Cache hits/misses
+    "session",  # Session management
+    "config",  # Configuration loading
     "orchestrator",  # Agent orchestrator
 }
 
@@ -67,6 +67,7 @@ def setup_logging(
         print(f"Warning: Could not create logs directory: {e}", file=sys.stderr)
         # Fall back to temp directory
         import tempfile
+
         logs_dir = Path(tempfile.gettempdir()) / "bullsh_logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -78,10 +79,11 @@ def setup_logging(
         # Set up file handler
         _file_handler = logging.FileHandler(str(_log_file), encoding="utf-8")
         _file_handler.setLevel(logging.DEBUG)
-        _file_handler.setFormatter(logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            datefmt="%H:%M:%S"
-        ))
+        _file_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"
+            )
+        )
 
         # Configure root logger to only use file handler (not console)
         root_logger = logging.getLogger("bullsh")
@@ -136,7 +138,9 @@ def log_tool_call(tool_name: str, params: dict[str, Any]) -> None:
     log("tools", f"CALL {tool_name}", params=params)
 
 
-def log_tool_result(tool_name: str, status: str, confidence: float, error: str | None = None) -> None:
+def log_tool_result(
+    tool_name: str, status: str, confidence: float, error: str | None = None
+) -> None:
     """Log a tool result."""
     if error:
         log("tools", f"RESULT {tool_name}", level="warning", status=status, error=error)
@@ -146,7 +150,14 @@ def log_tool_result(tool_name: str, status: str, confidence: float, error: str |
 
 def log_api_call(model: str, input_tokens: int, output_tokens: int, cached: int = 0) -> None:
     """Log a Claude API call."""
-    log("api", f"Claude API call", model=model, input=input_tokens, output=output_tokens, cached=cached)
+    log(
+        "api",
+        "Claude API call",
+        model=model,
+        input=input_tokens,
+        output=output_tokens,
+        cached=cached,
+    )
 
 
 def log_cache_hit(source: str, key: str) -> None:

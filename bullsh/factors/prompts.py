@@ -6,8 +6,7 @@ Claude explains pre-computed results, not calculate them.
 
 from typing import Any
 
-from bullsh.factors.session import FactorState, FactorStage
-
+from bullsh.factors.session import FactorStage, FactorState
 
 # Base professor persona - cached across stages (~150 tokens)
 PROFESSOR_BASE = """You are a finance professor guiding a student through multi-factor stock analysis.
@@ -24,7 +23,9 @@ Key principles:
 Keep responses focused and under 300 words unless explaining a complex concept."""
 
 
-def build_stage_prompt(stage: FactorStage, state: FactorState, data: dict[str, Any] | None = None) -> str:
+def build_stage_prompt(
+    stage: FactorStage, state: FactorState, data: dict[str, Any] | None = None
+) -> str:
     """
     Build minimal prompt for a specific stage.
 
@@ -148,10 +149,9 @@ def _prompt_stage_5(state: FactorState, data: dict[str, Any] | None) -> str:
     scores_text = ""
     if scores and ticker in scores:
         ticker_scores = scores[ticker]
-        scores_text = "\n".join([
-            f"  {f}: z-score = {ticker_scores.get(f, 0):.2f}"
-            for f in factors
-        ])
+        scores_text = "\n".join(
+            [f"  {f}: z-score = {ticker_scores.get(f, 0):.2f}" for f in factors]
+        )
 
     return f"""STAGE 5: FACTOR CALCULATION
 
@@ -176,15 +176,12 @@ def _prompt_stage_6(state: FactorState, data: dict[str, Any] | None) -> str:
     """Stage 6: Risk decomposition prompt."""
     ticker = state.primary_ticker or "the stock"
     variance = data.get("variance_decomposition", {}) if data else {}
-    correlations = data.get("correlations", {}) if data else {}
+    data.get("correlations", {}) if data else {}
 
     # Format variance breakdown
     variance_text = ""
     if variance:
-        variance_text = "\n".join([
-            f"  {factor}: {pct:.1f}%"
-            for factor, pct in variance.items()
-        ])
+        variance_text = "\n".join([f"  {factor}: {pct:.1f}%" for factor, pct in variance.items()])
 
     return f"""STAGE 6: RISK DECOMPOSITION
 
@@ -208,10 +205,9 @@ def _prompt_stage_7(state: FactorState, data: dict[str, Any] | None) -> str:
     # Format scenario results
     scenarios_text = ""
     if scenario_results:
-        scenarios_text = "\n".join([
-            f"  {name}: {ret * 100:+.1f}%"
-            for name, ret in scenario_results.items()
-        ])
+        scenarios_text = "\n".join(
+            [f"  {name}: {ret * 100:+.1f}%" for name, ret in scenario_results.items()]
+        )
 
     return f"""STAGE 7: SCENARIO ANALYSIS
 
@@ -236,7 +232,6 @@ Translate their narrative into factor return assumptions."""
 def _prompt_stage_8(state: FactorState, data: dict[str, Any] | None) -> str:
     """Stage 8: Excel generation prompt."""
     ticker = state.primary_ticker or "the stock"
-    excel_path = state.final_excel_path or "the output file"
 
     return f"""STAGE 8: EXCEL GENERATION COMPLETE
 

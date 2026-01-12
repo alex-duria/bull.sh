@@ -54,12 +54,18 @@ def format_tool_start(tool_name: str, params: dict[str, Any] | None = None) -> s
             query = params["query"]
             if len(query) > 30:
                 query = query[:27] + "..."
-            context = f" \"{query}\""
+            context = f' "{query}"'
 
     return f"  {SYMBOLS['running']} {desc}{context}..."
 
 
-def format_tool_result(tool_name: str, status: str, confidence: float = 1.0, cached: bool = False, error: str | None = None) -> str:
+def format_tool_result(
+    tool_name: str,
+    status: str,
+    confidence: float = 1.0,
+    cached: bool = False,
+    error: str | None = None,
+) -> str:
     """Format tool result message."""
     if cached:
         symbol = SYMBOLS["cached"]
@@ -82,7 +88,13 @@ def format_tool_result(tool_name: str, status: str, confidence: float = 1.0, cac
     return f" {symbol} {status_text}"
 
 
-def format_tool_line(tool_name: str, params: dict[str, Any] | None, status: str, confidence: float = 1.0, cached: bool = False) -> str:
+def format_tool_line(
+    tool_name: str,
+    params: dict[str, Any] | None,
+    status: str,
+    confidence: float = 1.0,
+    cached: bool = False,
+) -> str:
     """Format complete tool execution line (start + result)."""
     desc = TOOL_DESCRIPTIONS.get(tool_name, tool_name)
 

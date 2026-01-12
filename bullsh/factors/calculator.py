@@ -22,18 +22,19 @@ FACTORS = {
 # Sign conventions: True = higher is better, False = higher is worse
 # For value metrics, we invert (lower P/E = better value = higher score)
 FACTOR_SIGN = {
-    "value": False,       # Lower multiples = better value
-    "momentum": True,     # Higher momentum = better
-    "quality": True,      # Higher quality = better
-    "growth": True,       # Higher growth = better
-    "size": True,         # Larger = higher score (neutral interpretation)
-    "volatility": True,   # Higher vol = higher score (user interprets)
+    "value": False,  # Lower multiples = better value
+    "momentum": True,  # Higher momentum = better
+    "quality": True,  # Higher quality = better
+    "growth": True,  # Higher growth = better
+    "size": True,  # Larger = higher score (neutral interpretation)
+    "volatility": True,  # Higher vol = higher score (user interprets)
 }
 
 
 @dataclass
 class FactorScore:
     """Score for a single factor."""
+
     factor: str
     z_score: float
     percentile: float
@@ -44,6 +45,7 @@ class FactorScore:
 @dataclass
 class TickerFactorProfile:
     """Complete factor profile for a ticker."""
+
     ticker: str
     scores: dict[str, FactorScore]
     composite_score: float
@@ -86,10 +88,7 @@ def winsorize(values: list[float], lower_pct: float = 2.5, upper_pct: float = 97
     lower_bound = np.percentile(arr, lower_pct)
     upper_bound = np.percentile(arr, upper_pct)
 
-    return [
-        max(lower_bound, min(upper_bound, v))
-        for v in values
-    ]
+    return [max(lower_bound, min(upper_bound, v)) for v in values]
 
 
 def percentile_rank(value: float, all_values: list[float]) -> float:
@@ -113,8 +112,7 @@ def extract_value_metrics(yahoo_data: dict[str, Any]) -> dict[str, float | None]
 
 
 def extract_momentum_metrics(
-    yahoo_data: dict[str, Any],
-    price_history: dict[str, Any] | None = None
+    yahoo_data: dict[str, Any], price_history: dict[str, Any] | None = None
 ) -> dict[str, float | None]:
     """
     Extract momentum factor components.
@@ -178,8 +176,7 @@ def extract_size_metrics(yahoo_data: dict[str, Any]) -> dict[str, float | None]:
 
 
 def extract_volatility_metrics(
-    yahoo_data: dict[str, Any],
-    price_history: dict[str, Any] | None = None
+    yahoo_data: dict[str, Any], price_history: dict[str, Any] | None = None
 ) -> dict[str, float | None]:
     """
     Extract volatility factor components.
@@ -233,10 +230,7 @@ def calculate_returns_from_history(price_history: dict[str, Any]) -> dict[str, f
     return returns
 
 
-def calculate_realized_volatility(
-    price_history: dict[str, Any],
-    window: int = 60
-) -> float | None:
+def calculate_realized_volatility(price_history: dict[str, Any], window: int = 60) -> float | None:
     """
     Calculate annualized realized volatility from daily returns.
 
@@ -247,7 +241,7 @@ def calculate_realized_volatility(
         return None
 
     # Get last window+1 closes to compute window daily returns
-    recent_closes = [c[1] for c in sorted(closes, key=lambda x: x[0])[-(window + 1):]]
+    recent_closes = [c[1] for c in sorted(closes, key=lambda x: x[0])[-(window + 1) :]]
 
     # Daily returns
     daily_returns = []
@@ -307,7 +301,7 @@ def calculate_single_factor_score(
     # Extract metrics for ticker and peers
     ticker_metrics = extractor(ticker_data)
     peer_metrics_list = [extractor(pd) for pd in peer_data.values()]
-    all_tickers = [ticker] + list(peer_data.keys())
+    [ticker] + list(peer_data.keys())
     all_metrics = [ticker_metrics] + peer_metrics_list
 
     # Get component names

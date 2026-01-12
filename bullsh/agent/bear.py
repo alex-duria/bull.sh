@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from bullsh.agent.base import SubAgent, AgentResult
+from bullsh.agent.base import AgentResult, SubAgent
 from bullsh.config import Config
-from bullsh.tools.base import get_tools_for_claude
 from bullsh.logging import log
+from bullsh.tools.base import get_tools_for_claude
 
 
 class BearAgent(SubAgent):
@@ -40,7 +40,7 @@ class BearAgent(SubAgent):
 
     @property
     def system_prompt(self) -> str:
-        base_prompt = f"""You are an investment analyst arguing the BEAR CASE for {self.ticker or 'the company'}.
+        base_prompt = f"""You are an investment analyst arguing the BEAR CASE for {self.ticker or "the company"}.
 Your job is to find the strongest reasons to be cautious.
 
 Focus on:
@@ -97,8 +97,13 @@ USER HINTS (incorporate these points):
         """Return tools for research phase."""
         all_tools = get_tools_for_claude()
         research_tools = [
-            "sec_search", "sec_fetch", "rag_search",
-            "scrape_yahoo", "compute_ratios", "search_news", "web_search",
+            "sec_search",
+            "sec_fetch",
+            "rag_search",
+            "scrape_yahoo",
+            "compute_ratios",
+            "search_news",
+            "web_search",
         ]
         return [t for t in all_tools if t["name"] in research_tools]
 
@@ -150,21 +155,27 @@ USER HINTS (incorporate these points):
                 tool_results = []
                 for tool_use in tool_uses:
                     result = await self._execute_tool(tool_use.name, tool_use.input)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": self._format_tool_result(result),
-                    })
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use.id,
+                            "content": self._format_tool_result(result),
+                        }
+                    )
 
                 # Update messages for next iteration
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content,
-                })
-                messages.append({
-                    "role": "user",
-                    "content": tool_results,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content,
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": tool_results,
+                    }
+                )
 
             # Max iterations reached
             log("agent", f"BearAgent hit max iterations for {self.ticker}")
@@ -222,9 +233,7 @@ INSTRUCTIONS:
                 messages=messages,
                 # NO tools parameter - forces text-only response
             )
-            text_content = "".join(
-                block.text for block in response.content if block.type == "text"
-            )
+            text_content = "".join(block.text for block in response.content if block.type == "text")
             tokens_used = response.usage.input_tokens + response.usage.output_tokens
 
             return AgentResult(
@@ -281,9 +290,7 @@ INSTRUCTIONS:
                 messages=messages,
                 # NO tools parameter
             )
-            text_content = "".join(
-                block.text for block in response.content if block.type == "text"
-            )
+            text_content = "".join(block.text for block in response.content if block.type == "text")
             tokens_used = response.usage.input_tokens + response.usage.output_tokens
 
             # Clear hints after use

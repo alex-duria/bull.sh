@@ -7,16 +7,16 @@ from datetime import datetime
 
 import numpy as np
 
-from bullsh.tools.base import ToolResult, ToolStatus
+from bullsh.factors.calculator import FACTORS, calculate_composite_score, calculate_factor_scores
 from bullsh.factors.fetcher import fetch_all_factor_data
-from bullsh.factors.calculator import calculate_factor_scores, calculate_composite_score, FACTORS
 from bullsh.factors.regression import (
-    run_factor_regression,
+    RegressionResult,
     calculate_variance_decomposition,
     prepare_fama_french_data,
     prepare_stock_returns,
-    RegressionResult,
+    run_factor_regression,
 )
+from bullsh.tools.base import ToolResult, ToolStatus
 
 
 async def calculate_factors(
@@ -110,10 +110,9 @@ async def calculate_factors(
         factor_scores = {}
         for factor_name, score in primary_profile.scores.items():
             # Get first component value as representative raw value
-            raw_val = None
             if score.components:
                 first_component = next(iter(score.components.values()), None)
-                raw_val = round(first_component, 2) if first_component is not None else None
+                round(first_component, 2) if first_component is not None else None
 
             factor_scores[factor_name] = {
                 "z_score": round(score.z_score, 2),
@@ -270,10 +269,10 @@ async def run_factor_regression_tool(
             "alpha_t_stat": round(reg_result.alpha_t_stat, 2),
             "r_squared": round(reg_result.r_squared * 100, 1),
             "adj_r_squared": round(reg_result.adj_r_squared * 100, 1),
-            "idiosyncratic_vol": round(reg_result.residual_std * np.sqrt(12) * 100, 1),  # Annualized %
-            "variance_decomposition": {
-                k: round(v, 1) for k, v in var_decomp.items()
-            },
+            "idiosyncratic_vol": round(
+                reg_result.residual_std * np.sqrt(12) * 100, 1
+            ),  # Annualized %
+            "variance_decomposition": {k: round(v, 1) for k, v in var_decomp.items()},
             "interpretation": _interpret_regression_result(reg_result),
         }
 

@@ -1,15 +1,16 @@
 """Debate coordinator for bull vs. bear adversarial debates."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, AsyncIterator
+from typing import Any
 
-from bullsh.agent.bull import BullAgent
-from bullsh.agent.bear import BearAgent
-from bullsh.agent.moderator import ModeratorAgent, SynthesisResult
 from bullsh.agent.base import AgentResult
+from bullsh.agent.bear import BearAgent
+from bullsh.agent.bull import BullAgent
+from bullsh.agent.moderator import ModeratorAgent, SynthesisResult
 from bullsh.config import Config, get_config
 from bullsh.logging import log
 from bullsh.tools import sec
@@ -20,6 +21,7 @@ STALE_THRESHOLD_DAYS = 365
 
 class DebatePhase(Enum):
     """Phases of a debate."""
+
     INIT = "init"
     RESEARCH = "research"
     OPENING = "opening"
@@ -32,6 +34,7 @@ class DebatePhase(Enum):
 
 class DebateRefused(Exception):
     """Raised when debate cannot proceed (e.g., insufficient data)."""
+
     pass
 
 
@@ -42,6 +45,7 @@ class DebateState:
 
     Checkpointed after each phase completes.
     """
+
     ticker: str
     phase: DebatePhase = DebatePhase.INIT
     deep_mode: bool = False
@@ -173,7 +177,9 @@ class DebateCoordinator:
                 self.bear_agent.add_user_hint(hint)
         self._pending_hints = []
 
-    def _detect_stale_data(self, research_results: dict[str, Any] | None) -> tuple[bool, str | None]:
+    def _detect_stale_data(
+        self, research_results: dict[str, Any] | None
+    ) -> tuple[bool, str | None]:
         """
         Check if research data is older than STALE_THRESHOLD_DAYS.
 
@@ -331,7 +337,7 @@ class DebateCoordinator:
     async def _run_research(self) -> AsyncIterator[str]:
         """Phase 1: Parallel research."""
         self.state.phase = DebatePhase.RESEARCH
-        yield f"\n**Phase 1: Research**\n"
+        yield "\n**Phase 1: Research**\n"
 
         # Research tasks for both agents
         bull_task = f"Research {self.ticker} to build a BULL case. Focus on strengths, growth, and competitive advantages."
@@ -418,7 +424,9 @@ class DebateCoordinator:
 
         # Handle bull result
         if isinstance(bull_result, Exception):
-            bull_result = AgentResult(content="Opening failed", success=False, error=str(bull_result))
+            bull_result = AgentResult(
+                content="Opening failed", success=False, error=str(bull_result)
+            )
 
         self.state.bull_opening = bull_result.content
         self.state.tokens_used += bull_result.tokens_used
@@ -430,7 +438,9 @@ class DebateCoordinator:
 
         # Handle bear result
         if isinstance(bear_result, Exception):
-            bear_result = AgentResult(content="Opening failed", success=False, error=str(bear_result))
+            bear_result = AgentResult(
+                content="Opening failed", success=False, error=str(bear_result)
+            )
 
         self.state.bear_opening = bear_result.content
         self.state.tokens_used += bear_result.tokens_used
@@ -578,10 +588,18 @@ class DebateCoordinator:
             "bull_rebuttals": self.state.bull_rebuttals,
             "bear_rebuttals": self.state.bear_rebuttals,
             "synthesis": self.state.synthesis,
-            "conviction": self.state.synthesis_result.conviction if self.state.synthesis_result else None,
-            "conviction_direction": self.state.synthesis_result.conviction_direction if self.state.synthesis_result else None,
-            "thesis_breaker": self.state.synthesis_result.thesis_breaker if self.state.synthesis_result else None,
+            "conviction": self.state.synthesis_result.conviction
+            if self.state.synthesis_result
+            else None,
+            "conviction_direction": self.state.synthesis_result.conviction_direction
+            if self.state.synthesis_result
+            else None,
+            "thesis_breaker": self.state.synthesis_result.thesis_breaker
+            if self.state.synthesis_result
+            else None,
             "tokens_used": self.state.tokens_used,
             "started_at": self.state.started_at.isoformat(),
-            "completed_at": self.state.completed_at.isoformat() if self.state.completed_at else None,
+            "completed_at": self.state.completed_at.isoformat()
+            if self.state.completed_at
+            else None,
         }

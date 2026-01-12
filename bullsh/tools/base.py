@@ -8,6 +8,7 @@ from typing import Any
 
 class ToolStatus(Enum):
     """Status of a tool execution."""
+
     SUCCESS = "success"
     PARTIAL = "partial"  # Some data retrieved, but incomplete
     FAILED = "failed"
@@ -22,6 +23,7 @@ class ToolResult:
 
     All tools return this structure so the agent can assess data quality.
     """
+
     data: dict[str, Any]
     confidence: float  # 0.0 to 1.0
     status: ToolStatus
@@ -76,6 +78,7 @@ class ToolDefinition:
 
     This maps to the JSON schema format Claude expects.
     """
+
     name: str
     description: str
     parameters: dict[str, Any]
@@ -413,6 +416,70 @@ Use this for understanding systematic risk exposure and factor attribution.""",
     },
 )
 
+GET_FINANCIALS_TOOL = ToolDefinition(
+    name="get_financials",
+    description="""Get structured financial statements (income, balance sheet, cash flow) from best available source.
+
+Uses Financial Datasets API if configured, falls back to Yahoo Finance.
+
+Returns:
+- Income statement: revenue, gross_profit, operating_income, net_income
+- Balance sheet: total_assets, total_liabilities, shareholders_equity, cash
+- Cash flow: operating_cash_flow, investing_cash_flow, financing_cash_flow, free_cash_flow
+- Computed ratios: ROA, ROE (when data available)""",
+    parameters={
+        "properties": {
+            "ticker": {
+                "type": "string",
+                "description": "Stock ticker symbol (e.g., NVDA, AAPL)",
+            },
+            "statement_type": {
+                "type": "string",
+                "enum": ["income", "balance", "cashflow", "all"],
+                "description": "Type of statement to fetch (default: all)",
+            },
+            "period": {
+                "type": "string",
+                "enum": ["annual", "quarterly"],
+                "description": "Data period (default: annual)",
+            },
+            "years": {
+                "type": "integer",
+                "description": "Number of years of data (default: 3)",
+            },
+        },
+        "required": ["ticker"],
+    },
+)
+
+GET_INSIDER_TRANSACTIONS_TOOL = ToolDefinition(
+    name="get_insider_transactions",
+    description="""Get recent insider buy/sell transactions for a company.
+
+Shows recent transactions by executives, directors, and major shareholders.
+Useful for understanding insider sentiment - are insiders buying or selling?
+
+Returns:
+- List of transactions with insider name, title, transaction type, shares, value
+- Summary with buy/sell counts and totals
+- Overall sentiment indicator (bullish/bearish/neutral)
+
+Requires FINANCIAL_DATASETS_API_KEY to be configured.""",
+    parameters={
+        "properties": {
+            "ticker": {
+                "type": "string",
+                "description": "Stock ticker symbol (e.g., NVDA, AAPL)",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum transactions to return (default: 50)",
+            },
+        },
+        "required": ["ticker"],
+    },
+)
+
 # All available tools
 ALL_TOOLS = [
     SEC_SEARCH_TOOL,
@@ -429,6 +496,8 @@ ALL_TOOLS = [
     CALCULATE_FACTORS_TOOL,
     RUN_FACTOR_REGRESSION_TOOL,
     SAVE_THESIS_TOOL,
+    GET_FINANCIALS_TOOL,
+    GET_INSIDER_TRANSACTIONS_TOOL,
 ]
 
 
