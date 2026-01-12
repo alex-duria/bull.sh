@@ -1,25 +1,29 @@
 """Agent orchestrator - lightweight dispatcher for subagents."""
 
-import asyncio
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 from anthropic import Anthropic
 
+# Stampede integration
+from bullsh.agent.stampede import StampedeLoop
 from bullsh.config import Config
+from bullsh.logging import log, log_api_call, log_tool_call, log_tool_result
 from bullsh.tools.base import ToolResult, ToolStatus, get_tools_for_claude
-from bullsh.logging import log, log_tool_call, log_tool_result, log_api_call
 
 
 class TokenLimitExceeded(Exception):
     """Raised when token/cost limit is exceeded."""
+
     pass
 
 
 @dataclass
 class TokenUsage:
     """Track token usage for cost control."""
+
     input_tokens: int = 0
     output_tokens: int = 0
     api_calls: int = 0
@@ -71,6 +75,7 @@ class TokenUsage:
 @dataclass
 class AgentMessage:
     """A message in the conversation."""
+
     role: str  # "user" or "assistant"
     content: str | list[dict[str, Any]]
 
@@ -86,6 +91,9 @@ class Orchestrator:
     - Pass selective context to subagents
     - Weave results into unified response
     - Handle graceful degradation
+
+    With use_stampede=True, uses the new Plan→Execute→Reflect loop
+    for research queries.
     """
 
     config: Config
@@ -102,8 +110,21 @@ class Orchestrator:
     _warned_session: bool = field(default=False, repr=False)
     _warned_turn: bool = field(default=False, repr=False)
 
+    # Stampede integration
+    use_stampede: bool = True  # Enable new Plan→Execute→Reflect loop
+    _stampede: StampedeLoop | None = field(default=None, repr=False)
+
     def __post_init__(self) -> None:
         self._client = Anthropic(api_key=self.config.anthropic_api_key)
+        if self.use_stampede:
+            self._stampede = StampedeLoop(config=self.config)
+
+    @property
+    def stampede(self) -> StampedeLoop:
+        """Get or create the StampedeLoop instance."""
+        if self._stampede is None:
+            self._stampede = StampedeLoop(config=self.config)
+        return self._stampede
 
     @property
     def client(self) -> Anthropic:
@@ -153,11 +174,16 @@ class Orchestrator:
                     yield chunk
                 return
 
+        # Use Stampede for research queries (when enabled and no override)
+        if self.use_stampede and not system_override:
+            log("orchestrator", "Using Stampede loop")
+            async for chunk in self._run_stampede(user_message, framework):
+                yield chunk
+            return
+
+        # Fallback to legacy flow (system_override or stampede disabled)
         # Build system prompt (or use override)
-        if system_override:
-            system_prompt = system_override
-        else:
-            system_prompt = self._build_system_prompt(framework)
+        system_prompt = system_override or self._build_system_prompt(framework)
 
         # Convert history to Claude format
         messages = self._history_to_messages()
@@ -194,7 +220,7 @@ class Orchestrator:
         # Yahoo (1) + SEC search (1) + SEC fetch (2-3) + Social (1) + Framework analysis (2-3) + Synthesis
         max_iterations = 15
 
-        for iteration in range(max_iterations):
+        for iteration in range(max_iterations):  # noqa: B007 - iteration used after loop
             # Check turn limit before making another API call
             if self.turn_usage.total_tokens >= self.config.max_tokens_per_turn:
                 yield f"\n\n⚠️  Turn token limit reached ({self.turn_usage.total_tokens:,} tokens). Response truncated.\n"
@@ -203,11 +229,7 @@ class Orchestrator:
             # Build system prompt with optional caching
             if self.config.enable_prompt_caching:
                 system_content = [
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"}
-                    }
+                    {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
                 ]
             else:
                 system_content = system_prompt
@@ -219,33 +241,35 @@ class Orchestrator:
                 system=system_content,
                 tools=get_tools_for_claude(),
                 messages=messages,
-                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"} if self.config.enable_prompt_caching else {},
+                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
+                if self.config.enable_prompt_caching
+                else {},
             ) as stream:
-                tool_calls = []
                 current_text = ""
 
                 for event in stream:
-                    if hasattr(event, 'type'):
-                        if event.type == 'content_block_delta':
-                            if hasattr(event.delta, 'text'):
-                                current_text += event.delta.text
-                                yield event.delta.text
-                        elif event.type == 'content_block_start':
-                            if hasattr(event.content_block, 'type'):
-                                if event.content_block.type == 'tool_use':
-                                    # Tool call starting
-                                    pass
+                    if hasattr(event, "type"):
+                        if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                            current_text += event.delta.text
+                            yield event.delta.text
+                        elif (
+                            event.type == "content_block_start"
+                            and hasattr(event.content_block, "type")
+                            and event.content_block.type == "tool_use"
+                        ):
+                            # Tool call starting - handled in response processing below
+                            pass
 
                 # Get final message
                 response = stream.get_final_message()
 
             # Track token usage
-            if hasattr(response, 'usage'):
+            if hasattr(response, "usage"):
                 input_tokens = response.usage.input_tokens
                 output_tokens = response.usage.output_tokens
                 # Capture cache metrics if available
-                cache_read = getattr(response.usage, 'cache_read_input_tokens', 0) or 0
-                cache_creation = getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
+                cache_read = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+                cache_creation = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
 
                 self.turn_usage.add(input_tokens, output_tokens, cache_read, cache_creation)
                 self.session_usage.add(input_tokens, output_tokens, cache_read, cache_creation)
@@ -261,7 +285,8 @@ class Orchestrator:
             # Check if we need to handle tool calls
             if response.stop_reason == "tool_use":
                 # Process tool calls
-                from bullsh.ui.status import format_tool_start, format_tool_result
+                from bullsh.ui.status import format_tool_result, format_tool_start
+
                 tool_results = []
 
                 for block in response.content:
@@ -284,36 +309,46 @@ class Orchestrator:
                         )
 
                         # Show result status
-                        yield format_tool_result(
-                            block.name,
-                            result.status.value,
-                            result.confidence,
-                            result.cached,
-                            result.error_message,
-                        ) + "\n"
+                        yield (
+                            format_tool_result(
+                                block.name,
+                                result.status.value,
+                                result.confidence,
+                                result.cached,
+                                result.error_message,
+                            )
+                            + "\n"
+                        )
 
                         # Capture artifact if this tool generated a file
                         if self.session is not None:
                             from bullsh.storage.artifacts import extract_artifact_from_result
+
                             artifact = extract_artifact_from_result(result, self.session)
                             if artifact:
                                 log("orchestrator", f"Registered artifact: {artifact.filename}")
 
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result.to_prompt_text(),
-                        })
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": result.to_prompt_text(),
+                            }
+                        )
 
                 # Add assistant response and tool results to messages
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content,
-                })
-                messages.append({
-                    "role": "user",
-                    "content": tool_results,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content,
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": tool_results,
+                    }
+                )
 
                 accumulated_response += current_text
                 continue
@@ -365,7 +400,8 @@ class Orchestrator:
     async def _execute_tool(self, name: str, params: dict[str, Any]) -> ToolResult:
         """Execute a tool and return the result."""
         # Import tools lazily to avoid circular imports
-        from bullsh.tools import sec, yahoo, social, news, thesis as thesis_tool, rag, excel
+        from bullsh.tools import excel, news, rag, sec, social, yahoo
+        from bullsh.tools import thesis as thesis_tool
 
         match name:
             case "sec_search":
@@ -425,6 +461,7 @@ class Orchestrator:
                 )
             case "calculate_factors":
                 from bullsh.tools import factors as factors_tool
+
                 return await factors_tool.calculate_factors(
                     params["ticker"],
                     params.get("peers", []),
@@ -432,9 +469,26 @@ class Orchestrator:
                 )
             case "run_factor_regression":
                 from bullsh.tools import factors as factors_tool
+
                 return await factors_tool.run_factor_regression_tool(
                     params["ticker"],
                     params.get("window_months", 36),
+                )
+            case "get_financials":
+                from bullsh.tools import financials
+
+                return await financials.get_financials(
+                    params["ticker"],
+                    params.get("statement_type", "all"),
+                    params.get("period", "annual"),
+                    params.get("years", 3),
+                )
+            case "get_insider_transactions":
+                from bullsh.tools import insiders
+
+                return await insiders.get_insider_transactions(
+                    params["ticker"],
+                    params.get("limit", 50),
                 )
             case _:
                 return ToolResult(
@@ -638,6 +692,7 @@ END WITH: Clear verdict (Undervalued/Fairly Valued/Overvalued) and key assumptio
         # Inject artifacts section if session has artifacts
         if self.session is not None:
             from bullsh.storage.artifacts import ArtifactRegistry
+
             registry = ArtifactRegistry(self.session)
             artifacts_section = registry.to_prompt_section()
             if artifacts_section:
@@ -653,24 +708,27 @@ END WITH: Clear verdict (Undervalued/Fairly Valued/Overvalued) and key assumptio
 
         if len(self.history) > max_messages:
             # Keep first message (often contains important context) + last N-1
-            history_to_use = [self.history[0]] + list(self.history[-(max_messages - 1):])
+            history_to_use = [self.history[0]] + list(self.history[-(max_messages - 1) :])
 
             # Add a note about truncated history
             if len(history_to_use) > 1:
                 truncated_count = len(self.history) - max_messages
-                history_to_use.insert(1, AgentMessage(
-                    role="user",
-                    content=f"[Note: {truncated_count} earlier messages omitted to save context]"
-                ))
-                history_to_use.insert(2, AgentMessage(
-                    role="assistant",
-                    content="Understood, I'll continue based on the available context."
-                ))
+                history_to_use.insert(
+                    1,
+                    AgentMessage(
+                        role="user",
+                        content=f"[Note: {truncated_count} earlier messages omitted to save context]",
+                    ),
+                )
+                history_to_use.insert(
+                    2,
+                    AgentMessage(
+                        role="assistant",
+                        content="Understood, I'll continue based on the available context.",
+                    ),
+                )
 
-        return [
-            {"role": msg.role, "content": msg.content}
-            for msg in history_to_use
-        ]
+        return [{"role": msg.role, "content": msg.content} for msg in history_to_use]
 
     def clear_history(self) -> None:
         """Clear conversation history."""
@@ -686,22 +744,55 @@ END WITH: Clear verdict (Undervalued/Fairly Valued/Overvalued) and key assumptio
 
         # Check for comparison keywords
         comparison_keywords = [
-            "compare", "vs", "versus", "comparison", "which is better",
-            "side by side", "head to head", "stack up", "compete",
+            "compare",
+            "vs",
+            "versus",
+            "comparison",
+            "which is better",
+            "side by side",
+            "head to head",
+            "stack up",
+            "compete",
         ]
 
         if not any(kw in message_lower for kw in comparison_keywords):
             return None
 
         # Extract potential tickers (1-5 uppercase letters)
-        ticker_pattern = re.compile(r'\b([A-Z]{1,5})\b')
+        ticker_pattern = re.compile(r"\b([A-Z]{1,5})\b")
         potential_tickers = ticker_pattern.findall(message)
 
         # Filter out common words
         stop_words = {
-            "I", "A", "THE", "AND", "OR", "FOR", "TO", "IN", "ON", "AT",
-            "IS", "IT", "AS", "BY", "BE", "VS", "DO", "IF", "SO", "NO",
-            "AN", "OF", "UP", "GO", "MY", "WE", "HE", "ME", "US",
+            "I",
+            "A",
+            "THE",
+            "AND",
+            "OR",
+            "FOR",
+            "TO",
+            "IN",
+            "ON",
+            "AT",
+            "IS",
+            "IT",
+            "AS",
+            "BY",
+            "BE",
+            "VS",
+            "DO",
+            "IF",
+            "SO",
+            "NO",
+            "AN",
+            "OF",
+            "UP",
+            "GO",
+            "MY",
+            "WE",
+            "HE",
+            "ME",
+            "US",
         }
         tickers = [t for t in potential_tickers if t not in stop_words and len(t) >= 2]
 
@@ -762,3 +853,50 @@ END WITH: Clear verdict (Undervalued/Fairly Valued/Overvalued) and key assumptio
             yield f"\n❌ Comparison failed: {e}\n"
             yield "Falling back to standard analysis...\n"
             # Fall through to standard processing will be handled by caller
+
+    async def _run_stampede(
+        self,
+        message: str,
+        framework: str | None = None,
+    ) -> AsyncIterator[str]:
+        """
+        Run the Stampede Plan→Execute→Reflect loop.
+
+        Args:
+            message: User message
+            framework: Optional framework name
+
+        Yields:
+            Response chunks including progress and final answer
+        """
+        log("orchestrator", f"Running Stampede for: {message[:50]}...")
+
+        accumulated_response = ""
+
+        try:
+            async for chunk in self.stampede.run(message, show_progress=True):
+                accumulated_response += chunk
+                yield chunk
+
+            # Sync resolved tickers from Stampede to session
+            # This ensures company names like "Tesla" are stored as "TSLA"
+            if self.session is not None and hasattr(self.session, "tickers"):
+                for ticker in self.stampede.prior_tickers:
+                    if ticker not in self.session.tickers:
+                        self.session.tickers.append(ticker)
+
+            # Update history with final response
+            if accumulated_response.strip():
+                self.history.append(AgentMessage(role="assistant", content=accumulated_response))
+
+        except Exception as e:
+            log("orchestrator", f"Stampede error: {e}", level="error")
+            yield f"\n❌ Stampede error: {e}\n"
+            yield "Falling back to legacy flow...\n"
+
+            # Fall back to legacy flow
+            system_prompt = self._build_system_prompt(framework)
+            messages = self._history_to_messages()
+
+            async for chunk in self._stream_response(system_prompt, messages, framework):
+                yield chunk

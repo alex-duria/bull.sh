@@ -5,7 +5,6 @@ import atexit
 import gc
 import re
 import shlex
-import sys
 import warnings
 
 # Suppress SSL socket warnings on exit
@@ -22,23 +21,23 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from bullsh.config import Config
 from bullsh.agent.orchestrator import Orchestrator, TokenLimitExceeded
+from bullsh.config import Config
 from bullsh.storage import (
     Session,
     get_cache,
     get_session_manager,
 )
-from bullsh.ui.theme import RICH_THEME, COLORS
 from bullsh.ui.suggestions import (
-    SuggestionEngine,
-    TipEngine,
-    SuggestionState,
     SuggestionContext,
+    SuggestionEngine,
+    SuggestionState,
+    TipEngine,
     format_suggestions,
     format_tip,
     parse_numeric_input,
 )
+from bullsh.ui.theme import COLORS, RICH_THEME
 
 
 def _cleanup_on_exit():
@@ -55,7 +54,9 @@ console = Console(theme=RICH_THEME)
 # Keybinding action flags (set by keybindings, checked in loop)
 class KeybindingAction:
     """Store keybinding action to execute."""
+
     action: str | None = None
+
 
 _kb_action = KeybindingAction()
 
@@ -66,25 +67,25 @@ def _create_keybindings() -> KeyBindings:
 
     kb = KeyBindings()
 
-    @kb.add('c-s')
+    @kb.add("c-s")
     def _(event):
         """Ctrl+S: Save session."""
         _kb_action.action = "save"
         event.app.exit(result="")
 
-    @kb.add('c-l')
+    @kb.add("c-l")
     def _(event):
         """Ctrl+L: Clear screen."""
         _kb_action.action = "clear"
         event.app.exit(result="")
 
-    @kb.add('c-e')
+    @kb.add("c-e")
     def _(event):
         """Ctrl+E: Export."""
         _kb_action.action = "export"
         event.app.exit(result="")
 
-    @kb.add('enter', filter=completion_is_selected)
+    @kb.add("enter", filter=completion_is_selected)
     def _(event):
         """When completion is selected, Enter accepts it and adds a space to continue typing."""
         buf = event.app.current_buffer
@@ -92,9 +93,9 @@ def _create_keybindings() -> KeyBindings:
         if completion:
             buf.apply_completion(completion)
             # Add space so user can continue typing arguments
-            buf.insert_text(' ')
+            buf.insert_text(" ")
 
-    @kb.add('tab', filter=has_completions)
+    @kb.add("tab", filter=has_completions)
     def _(event):
         """Tab accepts the current completion."""
         buf = event.app.current_buffer
@@ -111,10 +112,17 @@ class BullshCompleter(Completer):
     SLASH_COMMANDS: dict[str, dict] = {
         # Research commands
         "/research": {"desc": "Research a company", "args": "<TICKER>", "opts": ["-f FRAMEWORK"]},
-        "/compare": {"desc": "Compare 2-3 companies", "args": "<T1> <T2> [T3]", "opts": ["-f FRAMEWORK"]},
-        "/debate": {"desc": "Bull vs Bear debate", "args": "<TICKER>", "opts": ["--deep", "-f FRAMEWORK"]},
+        "/compare": {
+            "desc": "Compare 2-3 companies",
+            "args": "<T1> <T2> [T3]",
+            "opts": ["-f FRAMEWORK"],
+        },
+        "/debate": {
+            "desc": "Bull vs Bear debate",
+            "args": "<TICKER>",
+            "opts": ["--deep", "-f FRAMEWORK"],
+        },
         "/thesis": {"desc": "Generate investment thesis", "args": "[TICKER]"},
-
         # Framework (submenu)
         "/framework": {
             "desc": "Switch analysis framework",
@@ -127,17 +135,14 @@ class BullshCompleter(Completer):
                 "off": "Return to freestyle mode",
             },
         },
-
         # Export commands
         "/excel": {"desc": "Generate Excel model", "args": "[TICKER]"},
         "/export": {"desc": "Export research (md/pdf/docx)", "args": "[filename]"},
-
         # Session commands
         "/save": {"desc": "Save current session", "args": "[name]"},
         "/sessions": {"desc": "List saved sessions"},
         "/resume": {"desc": "Resume a session", "args": "<SESSION_ID>"},
         "/clear": {"desc": "Clear current session"},
-
         # Cache (submenu)
         "/cache": {
             "desc": "Cache management",
@@ -148,7 +153,6 @@ class BullshCompleter(Completer):
                 "refresh": "Refresh ticker cache",
             },
         },
-
         # RAG (submenu)
         "/rag": {
             "desc": "Vector database",
@@ -158,7 +162,6 @@ class BullshCompleter(Completer):
                 "clear": "Clear vector database",
             },
         },
-
         # Info commands
         "/sources": {"desc": "Show data sources used"},
         "/usage": {"desc": "Show token usage and cost"},
@@ -196,7 +199,7 @@ class BullshCompleter(Completer):
             for cmd, data in self.SLASH_COMMANDS.items():
                 if "submenu" in data and text_lower.startswith(cmd + " "):
                     # Show sub-menu options
-                    subtext = text[len(cmd) + 1:]  # Text after "/cmd "
+                    subtext = text[len(cmd) + 1 :]  # Text after "/cmd "
                     for opt, desc in data["submenu"].items():
                         if opt.startswith(subtext.lower()):
                             yield Completion(
@@ -209,7 +212,7 @@ class BullshCompleter(Completer):
             # Check for ticker command context (e.g., "/debate ")
             for cmd in self.TICKER_COMMANDS:
                 if text_lower.startswith(cmd + " "):
-                    remaining = text[len(cmd) + 1:]
+                    remaining = text[len(cmd) + 1 :]
                     # If no ticker yet, show session tickers
                     if " " not in remaining:
                         yield from self._get_ticker_completions(remaining)
@@ -263,16 +266,21 @@ class BullshCompleter(Completer):
                     yield Completion(opt, start_position=0, display_meta=desc)
 
         # === TOP-LEVEL COMMAND ARGUMENTS ===
-        elif any(text_lower.startswith(cmd + " ") for cmd in ["research", "compare", "debate", "thesis", "summary"]):
+        elif any(
+            text_lower.startswith(cmd + " ")
+            for cmd in ["research", "compare", "debate", "thesis", "summary"]
+        ):
             for cmd in ["research", "compare", "debate", "thesis", "summary"]:
                 if text_lower.startswith(cmd + " "):
-                    remaining = text[len(cmd) + 1:]
+                    remaining = text[len(cmd) + 1 :]
                     # If looks like start of ticker, suggest session tickers
                     if " " not in remaining:
                         yield from self._get_ticker_completions(remaining)
                     # After ticker, suggest framework flag
                     elif "-f" not in text and "--framework" not in text:
-                        yield Completion("-f", start_position=0, display_meta="Add framework analysis")
+                        yield Completion(
+                            "-f", start_position=0, display_meta="Add framework analysis"
+                        )
                     break
 
     def _get_ticker_completions(self, prefix: str):
@@ -316,14 +324,16 @@ def _get_prompt_session(config: Config, session: Session | None = None) -> Promp
     history_file = config.data_dir / ".history"
 
     # Use theme colors for prompt styling
-    style = Style.from_dict({
-        'prompt': f'bold {COLORS["primary"]}',
-        'completion-menu': f'bg:{COLORS["bg_panel"]} {COLORS["text"]}',
-        'completion-menu.completion': f'bg:{COLORS["bg_panel"]} {COLORS["text"]}',
-        'completion-menu.completion.current': f'bg:{COLORS["bg_highlight"]} {COLORS["text_bright"]} bold',
-        'completion-menu.meta': f'bg:{COLORS["bg_panel"]} {COLORS["text_muted"]} italic',
-        'completion-menu.meta.current': f'bg:{COLORS["bg_highlight"]} {COLORS["secondary"]} italic',
-    })
+    style = Style.from_dict(
+        {
+            "prompt": f"bold {COLORS['primary']}",
+            "completion-menu": f"bg:{COLORS['bg_panel']} {COLORS['text']}",
+            "completion-menu.completion": f"bg:{COLORS['bg_panel']} {COLORS['text']}",
+            "completion-menu.completion.current": f"bg:{COLORS['bg_highlight']} {COLORS['text_bright']} bold",
+            "completion-menu.meta": f"bg:{COLORS['bg_panel']} {COLORS['text_muted']} italic",
+            "completion-menu.meta.current": f"bg:{COLORS['bg_highlight']} {COLORS['secondary']} italic",
+        }
+    )
 
     return PromptSession(
         history=FileHistory(str(history_file)),
@@ -349,7 +359,9 @@ def run_repl_with_session(
     asyncio.run(_async_repl_with_session(config, orchestrator, session, framework))
 
 
-async def _async_repl(config: Config, framework: str | None = None, skip_intro: bool = False) -> None:
+async def _async_repl(
+    config: Config, framework: str | None = None, skip_intro: bool = False
+) -> None:
     """Async REPL implementation."""
     orchestrator = Orchestrator(config)
     session_manager = get_session_manager()
@@ -383,6 +395,7 @@ async def _play_intro(skip: bool = False) -> bool:
 
     try:
         from bullsh.ui.intro import play_intro_animation
+
         return await play_intro_animation(duration=4.0)
     except Exception:
         # Fallback if animation fails
@@ -391,7 +404,7 @@ async def _play_intro(skip: bool = False) -> bool:
 
 def _show_welcome(framework: str | None = None, compact: bool = False) -> None:
     """Display welcome banner."""
-    from bullsh.ui.intro import render_logo, TAGLINE, THEME
+    from bullsh.ui.intro import TAGLINE, THEME, render_logo
 
     if not compact:
         # Show logo
@@ -400,13 +413,13 @@ def _show_welcome(framework: str | None = None, compact: bool = False) -> None:
         console.print(logo, justify="center")
         console.print()
         console.print(f"[italic {THEME['secondary']}]{TAGLINE}[/]", justify="center")
-        console.print(f"[dim]SEC filings • Market data • AI analysis[/dim]", justify="center")
+        console.print("[dim]SEC filings • Market data • AI analysis[/dim]", justify="center")
         console.print(f"[{THEME['muted']}]{'─' * 40}[/]", justify="center")
-        console.print(f"[dim]Made with [red]❤[/red] by Alexander Duria[/dim]", justify="center")
+        console.print("[dim]Made with [red]❤[/red] by Alexander Duria[/dim]", justify="center")
         console.print()
 
     # Compact command hints
-    hints = f"""[bold]Quick Start:[/bold]
+    hints = """[bold]Quick Start:[/bold]
   [cyan]research TICKER[/cyan]    Research a company      [dim]e.g. research NVDA[/dim]
   [cyan]compare T1 T2[/cyan]      Compare companies       [dim]e.g. compare AAPL MSFT[/dim]
   [cyan]/framework NAME[/cyan]   Use analysis framework  [dim]piotroski, porter, valuation[/dim]
@@ -595,7 +608,9 @@ async def _repl_loop(
 
         except TokenLimitExceeded as e:
             console.print(f"\n[bold red]Token limit exceeded:[/bold red] {e}")
-            console.print("[dim]Use /usage to see current usage. Start a new session to continue.[/dim]")
+            console.print(
+                "[dim]Use /usage to see current usage. Start a new session to continue.[/dim]"
+            )
             session_manager.save(session)
         except Exception as e:
             console.print(f"\n[red]Error:[/red] {e}")
@@ -634,7 +649,6 @@ async def _handle_command(
 
     # Parse common flags
     framework_override = current_framework
-    verbose = False
     remaining_args = []
 
     i = 0
@@ -643,7 +657,6 @@ async def _handle_command(
             framework_override = args[i + 1]
             i += 2
         elif args[i] == "--verbose":
-            verbose = True
             i += 1
         else:
             remaining_args.append(args[i])
@@ -657,7 +670,11 @@ async def _handle_command(
                 return "handled"
             ticker = remaining_args[0].upper()
             await _run_research(
-                orchestrator, session, ticker, framework_override, config,
+                orchestrator,
+                session,
+                ticker,
+                framework_override,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -673,7 +690,11 @@ async def _handle_command(
                 return "handled"
             tickers = [t.upper() for t in remaining_args[:3]]
             await _run_compare(
-                orchestrator, session, tickers, framework_override, config,
+                orchestrator,
+                session,
+                tickers,
+                framework_override,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -686,7 +707,10 @@ async def _handle_command(
                 return "handled"
             ticker = remaining_args[0].upper()
             await _run_thesis(
-                orchestrator, session, ticker, config,
+                orchestrator,
+                session,
+                ticker,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -700,7 +724,12 @@ async def _handle_command(
             ticker = remaining_args[0].upper()
             deep_mode = "--deep" in args or "-d" in args
             await _run_debate(
-                orchestrator, session, ticker, framework_override, deep_mode, config,
+                orchestrator,
+                session,
+                ticker,
+                framework_override,
+                deep_mode,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -713,7 +742,10 @@ async def _handle_command(
                 return "handled"
             ticker = remaining_args[0].upper()
             await _run_summary(
-                orchestrator, session, ticker, config,
+                orchestrator,
+                session,
+                ticker,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -732,6 +764,7 @@ async def _handle_command(
             console.print("[dim]Goodbye![/dim]")
             get_session_manager().save(session)
             import sys
+
             sys.exit(0)
 
         case _:
@@ -751,18 +784,31 @@ async def _run_factor_session(
     only for professor explanations of pre-computed results.
     """
     from datetime import datetime
-    from bullsh.factors.session import FactorSession, FactorStage, validate_us_ticker, validate_peer_set
-    from bullsh.factors.fetcher import fetch_all_factor_data
-    from bullsh.factors.calculator import calculate_factor_scores, calculate_composite_score
-    from bullsh.factors.regression import (
-        run_factor_regression, run_rolling_regression, calculate_variance_decomposition,
-        calculate_correlations, prepare_fama_french_data, prepare_stock_returns
-    )
-    from bullsh.factors.scenarios import calculate_all_scenario_returns, SCENARIOS
-    from bullsh.factors.prompts import (
-        build_stage_prompt, format_factor_menu, parse_factor_selection, parse_weight_input
-    )
+
+    from bullsh.factors.calculator import calculate_composite_score, calculate_factor_scores
     from bullsh.factors.excel_factors import generate_factor_excel
+    from bullsh.factors.fetcher import fetch_all_factor_data
+    from bullsh.factors.prompts import (
+        build_stage_prompt,
+        format_factor_menu,
+        parse_factor_selection,
+        parse_weight_input,
+    )
+    from bullsh.factors.regression import (
+        calculate_correlations,
+        calculate_variance_decomposition,
+        prepare_fama_french_data,
+        prepare_stock_returns,
+        run_factor_regression,
+        run_rolling_regression,
+    )
+    from bullsh.factors.scenarios import SCENARIOS, calculate_all_scenario_returns
+    from bullsh.factors.session import (
+        FactorSession,
+        FactorStage,
+        validate_peer_set,
+        validate_us_ticker,
+    )
 
     # Initialize or resume factor session
     factor_session = FactorSession(session)
@@ -772,7 +818,9 @@ async def _run_factor_session(
     cached_data: dict = {}
 
     console.print("\n[bold cyan]Multi-Factor Analysis Session[/bold cyan]")
-    console.print(f"[dim]Stage {factor_session.stage.value}/8: {factor_session.stage.display_name}[/dim]\n")
+    console.print(
+        f"[dim]Stage {factor_session.stage.value}/8: {factor_session.stage.display_name}[/dim]\n"
+    )
 
     while not factor_session.is_complete:
         stage = factor_session.stage
@@ -791,7 +839,7 @@ async def _run_factor_session(
             console.print("[bold]Professor:[/bold]")
             async for chunk in orchestrator.chat(
                 "Start the factor analysis session. Welcome the student and ask for a ticker.",
-                system_override=prompt
+                system_override=prompt,
             ):
                 console.print(chunk, end="")
             console.print("\n")
@@ -834,7 +882,7 @@ async def _run_factor_session(
                 factor_session.advance_stage()
                 continue
 
-            console.print(f"[dim]Stage 2/8: Peer Selection[/dim]")
+            console.print("[dim]Stage 2/8: Peer Selection[/dim]")
             console.print(f"[bold]Analyzing:[/bold] {factor_session.state.primary_ticker}\n")
 
             # Professor guidance
@@ -842,7 +890,7 @@ async def _run_factor_session(
             console.print("[bold]Professor:[/bold]")
             async for chunk in orchestrator.chat(
                 f"Guide peer selection for {factor_session.state.primary_ticker}. Ask for 2-6 peer tickers.",
-                system_override=prompt
+                system_override=prompt,
             ):
                 console.print(chunk, end="")
             console.print("\n")
@@ -887,11 +935,13 @@ async def _run_factor_session(
         # =====================================================
         elif stage == FactorStage.FACTOR_WEIGHTING:
             if factor_session.state.selected_factors:
-                console.print(f"[dim]Factors: {', '.join(factor_session.state.selected_factors)}[/dim]")
+                console.print(
+                    f"[dim]Factors: {', '.join(factor_session.state.selected_factors)}[/dim]"
+                )
                 factor_session.advance_stage()
                 continue
 
-            console.print(f"[dim]Stage 3/8: Factor Selection & Weighting[/dim]\n")
+            console.print("[dim]Stage 3/8: Factor Selection & Weighting[/dim]\n")
 
             # Show factor menu
             console.print(format_factor_menu())
@@ -954,24 +1004,25 @@ async def _run_factor_session(
                 weights = None
 
             factor_session.set_factors(factors, weights)
-            console.print(f"[green]✓ Weights set[/green]\n")
+            console.print("[green]✓ Weights set[/green]\n")
             factor_session.advance_stage()
 
         # =====================================================
         # STAGE 4: Data Fetching (Pure Python - No Claude)
         # =====================================================
         elif stage == FactorStage.DATA_FETCHING:
-            console.print(f"[dim]Stage 4/8: Data Fetching[/dim]\n")
+            console.print("[dim]Stage 4/8: Data Fetching[/dim]\n")
             console.print("[bold]Fetching data in parallel...[/bold]")
 
             all_tickers = factor_session.get_all_tickers()
             console.print(f"[dim]Tickers: {', '.join(all_tickers)}[/dim]")
-            console.print(f"[dim]Benchmark: ^GSPC (S&P 500)[/dim]")
-            console.print(f"[dim]Fama-French factor returns[/dim]\n")
+            console.print("[dim]Benchmark: ^GSPC (S&P 500)[/dim]")
+            console.print("[dim]Fama-French factor returns[/dim]\n")
 
             # Fetch all data
             try:
                 from rich.progress import Progress, SpinnerColumn, TextColumn
+
                 with Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
@@ -1007,7 +1058,7 @@ async def _run_factor_session(
         # STAGE 5: Factor Calculation (Python calc, Claude explains)
         # =====================================================
         elif stage == FactorStage.FACTOR_CALCULATION:
-            console.print(f"[dim]Stage 5/8: Factor Calculation[/dim]\n")
+            console.print("[dim]Stage 5/8: Factor Calculation[/dim]\n")
 
             # Calculate factor scores (Pure Python)
             console.print("[bold]Computing factor scores...[/bold]")
@@ -1062,7 +1113,7 @@ async def _run_factor_session(
                 console.print("[bold]Professor:[/bold]")
                 async for chunk in orchestrator.chat(
                     f"Explain the factor scores I calculated for {factor_session.state.primary_ticker}. Walk through one calculation example.",
-                    system_override=prompt
+                    system_override=prompt,
                 ):
                     console.print(chunk, end="")
                 console.print("\n")
@@ -1077,7 +1128,7 @@ async def _run_factor_session(
         # STAGE 6: Risk Decomposition
         # =====================================================
         elif stage == FactorStage.RISK_DECOMPOSITION:
-            console.print(f"[dim]Stage 6/8: Risk Decomposition[/dim]\n")
+            console.print("[dim]Stage 6/8: Risk Decomposition[/dim]\n")
 
             try:
                 # Calculate correlations
@@ -1107,7 +1158,9 @@ async def _run_factor_session(
 
                         if not stock_returns.empty and not factor_returns.empty:
                             # Run regression
-                            reg_result = run_factor_regression(stock_returns, factor_returns, rf_returns)
+                            reg_result = run_factor_regression(
+                                stock_returns, factor_returns, rf_returns
+                            )
 
                             if reg_result is not None:
                                 # Store betas
@@ -1126,7 +1179,9 @@ async def _run_factor_session(
                                 console.print("[green]✓ Fama-French regression complete[/green]")
 
                                 # Run rolling regression for historical exposures
-                                console.print("[bold]Calculating rolling factor exposures...[/bold]")
+                                console.print(
+                                    "[bold]Calculating rolling factor exposures...[/bold]"
+                                )
                                 rolling_betas = run_rolling_regression(
                                     stock_returns, factor_returns, rf_returns, window=36
                                 )
@@ -1134,9 +1189,13 @@ async def _run_factor_session(
                                     cached_data["rolling_betas"] = rolling_betas
                                     console.print("[green]✓ Rolling regression complete[/green]")
                             else:
-                                console.print("[yellow]⚠ Regression failed - using approximation[/yellow]")
+                                console.print(
+                                    "[yellow]⚠ Regression failed - using approximation[/yellow]"
+                                )
                     except Exception as e:
-                        console.print(f"[yellow]⚠ Regression error: {e} - using approximation[/yellow]")
+                        console.print(
+                            f"[yellow]⚠ Regression error: {e} - using approximation[/yellow]"
+                        )
 
                 # Fallback to approximation if regression failed
                 if not variance_decomp:
@@ -1157,14 +1216,18 @@ async def _run_factor_session(
                 console.print()
 
                 # Professor explains
-                prompt = build_stage_prompt(stage, factor_session.state, {
-                    "variance_decomposition": variance_decomp,
-                    "correlations": correlations,
-                })
+                prompt = build_stage_prompt(
+                    stage,
+                    factor_session.state,
+                    {
+                        "variance_decomposition": variance_decomp,
+                        "correlations": correlations,
+                    },
+                )
                 console.print("[bold]Professor:[/bold]")
                 async for chunk in orchestrator.chat(
                     "Explain the risk decomposition results. What does this tell us about systematic vs idiosyncratic risk?",
-                    system_override=prompt
+                    system_override=prompt,
                 ):
                     console.print(chunk, end="")
                 console.print("\n")
@@ -1179,7 +1242,7 @@ async def _run_factor_session(
         # STAGE 7: Scenario Analysis
         # =====================================================
         elif stage == FactorStage.SCENARIO_ANALYSIS:
-            console.print(f"[dim]Stage 7/8: Scenario Analysis[/dim]\n")
+            console.print("[dim]Stage 7/8: Scenario Analysis[/dim]\n")
 
             try:
                 # Get factor exposures for primary ticker
@@ -1194,22 +1257,28 @@ async def _run_factor_session(
                 console.print("[green]✓ Scenario analysis complete[/green]\n")
 
                 # Display results
-                console.print(f"[bold]Scenario Expected Returns for {factor_session.state.primary_ticker}:[/bold]")
+                console.print(
+                    f"[bold]Scenario Expected Returns for {factor_session.state.primary_ticker}:[/bold]"
+                )
                 for scenario_name, ret in scenario_returns.items():
                     scenario = SCENARIOS.get(scenario_name)
                     display_name = scenario.display_name if scenario else scenario_name
                     color = "green" if ret > 0 else "red"
-                    console.print(f"  {display_name:30} [{color}]{ret*100:+.1f}%[/{color}]")
+                    console.print(f"  {display_name:30} [{color}]{ret * 100:+.1f}%[/{color}]")
                 console.print()
 
                 # Professor explains
-                prompt = build_stage_prompt(stage, factor_session.state, {
-                    "scenario_results": scenario_returns,
-                })
+                prompt = build_stage_prompt(
+                    stage,
+                    factor_session.state,
+                    {
+                        "scenario_results": scenario_returns,
+                    },
+                )
                 console.print("[bold]Professor:[/bold]")
                 async for chunk in orchestrator.chat(
                     "Explain the scenario analysis results. Which scenarios pose risks and which present opportunities?",
-                    system_override=prompt
+                    system_override=prompt,
                 ):
                     console.print(chunk, end="")
                 console.print("\n")
@@ -1224,7 +1293,7 @@ async def _run_factor_session(
         # STAGE 8: Excel Generation (Pure Python - No Claude)
         # =====================================================
         elif stage == FactorStage.EXCEL_GENERATION:
-            console.print(f"[dim]Stage 8/8: Excel Generation[/dim]\n")
+            console.print("[dim]Stage 8/8: Excel Generation[/dim]\n")
 
             console.print("[bold]Generating 9-tab Excel workbook...[/bold]")
 
@@ -1236,34 +1305,60 @@ async def _run_factor_session(
                 )
                 factor_session.set_excel_path(str(excel_path), final=True)
 
-                console.print(f"[green]✓ Excel workbook saved:[/green]")
+                console.print("[green]✓ Excel workbook saved:[/green]")
                 console.print(f"  [cyan]{excel_path}[/cyan]\n")
 
                 # Final summary
                 console.print("[bold]Professor:[/bold]")
-                console.print(f"Congratulations on completing the factor analysis for {factor_session.state.primary_ticker}!\n")
+                console.print(
+                    f"Congratulations on completing the factor analysis for {factor_session.state.primary_ticker}!\n"
+                )
                 console.print("[bold]Key Findings:[/bold]")
 
                 primary_scores = factor_session.state.factor_scores.get(
                     factor_session.state.primary_ticker, {}
                 )
-                strongest = max(primary_scores.items(), key=lambda x: x[1]) if primary_scores else ("N/A", 0)
-                weakest = min(primary_scores.items(), key=lambda x: x[1]) if primary_scores else ("N/A", 0)
+                strongest = (
+                    max(primary_scores.items(), key=lambda x: x[1])
+                    if primary_scores
+                    else ("N/A", 0)
+                )
+                weakest = (
+                    min(primary_scores.items(), key=lambda x: x[1])
+                    if primary_scores
+                    else ("N/A", 0)
+                )
 
-                console.print(f"  • Strongest factor: {strongest[0].title()} (z={strongest[1]:.2f})")
+                console.print(
+                    f"  • Strongest factor: {strongest[0].title()} (z={strongest[1]:.2f})"
+                )
                 console.print(f"  • Weakest factor: {weakest[0].title()} (z={weakest[1]:.2f})")
 
-                best_scenario = max(factor_session.state.scenario_results.items(), key=lambda x: x[1])
-                worst_scenario = min(factor_session.state.scenario_results.items(), key=lambda x: x[1])
-                console.print(f"  • Best scenario: {best_scenario[0]} ({best_scenario[1]*100:+.1f}%)")
-                console.print(f"  • Worst scenario: {worst_scenario[0]} ({worst_scenario[1]*100:+.1f}%)")
+                best_scenario = max(
+                    factor_session.state.scenario_results.items(), key=lambda x: x[1]
+                )
+                worst_scenario = min(
+                    factor_session.state.scenario_results.items(), key=lambda x: x[1]
+                )
+                console.print(
+                    f"  • Best scenario: {best_scenario[0]} ({best_scenario[1] * 100:+.1f}%)"
+                )
+                console.print(
+                    f"  • Worst scenario: {worst_scenario[0]} ({worst_scenario[1] * 100:+.1f}%)"
+                )
                 console.print()
 
                 console.print("[bold]Excel Workbook Tabs:[/bold]")
                 tabs = [
-                    "Executive Summary", "Factor Exposures", "Peer Comparison",
-                    "Risk Decomposition", "Historical Exposures", "Scenario Analysis",
-                    "Fundamentals", "Price Data", "Methodology"
+                    "Executive Summary",
+                    "Factor Exposures",
+                    "Peer Comparison",
+                    "Risk Decomposition",
+                    "Historical Exposures",
+                    "Scenario Analysis",
+                    "Fundamentals",
+                    "Price Data",
+                    "Methodology",
                 ]
                 for i, tab in enumerate(tabs, 1):
                     console.print(f"  {i}. {tab}")
@@ -1297,9 +1392,11 @@ async def _run_research(
         console.print(f"[dim]Framework: {framework}[/dim]")
     console.print()
 
-    # Add ticker to session
-    if ticker not in session.tickers:
-        session.tickers.append(ticker)
+    # Don't add raw ticker here when Stampede is enabled
+    # Stampede will resolve company names (e.g., "Tesla" → "TSLA") and sync to session
+    if not orchestrator.use_stampede:
+        if ticker not in session.tickers:
+            session.tickers.append(ticker)
 
     # Build prompt
     prompt = f"Research {ticker} for me."
@@ -1309,7 +1406,10 @@ async def _run_research(
         prompt += " Apply Porter's Five Forces framework and analyze each competitive force."
 
     await _execute_agent_query(
-        orchestrator, session, prompt, framework,
+        orchestrator,
+        session,
+        prompt,
+        framework,
         action="research",
         suggestion_engine=suggestion_engine,
         tip_engine=tip_engine,
@@ -1335,10 +1435,12 @@ async def _run_compare(
         console.print(f"[dim]Framework: {framework}[/dim]")
     console.print()
 
-    # Add tickers to session
-    for t in tickers:
-        if t not in session.tickers:
-            session.tickers.append(t)
+    # Don't add raw tickers when Stampede is enabled
+    # Stampede will resolve company names and sync to session
+    if not orchestrator.use_stampede:
+        for t in tickers:
+            if t not in session.tickers:
+                session.tickers.append(t)
 
     # Build prompt
     prompt = f"""Compare {ticker_list} for me. For each company, gather key financial data and analyst sentiment, then provide a side-by-side comparison highlighting:
@@ -1356,7 +1458,10 @@ Conclude with which company appears most attractive and why."""
         prompt += "\n\nAnalyze Porter's Five Forces for each company."
 
     await _execute_agent_query(
-        orchestrator, session, prompt, framework,
+        orchestrator,
+        session,
+        prompt,
+        framework,
         action="compare",
         suggestion_engine=suggestion_engine,
         tip_engine=tip_engine,
@@ -1378,8 +1483,10 @@ async def _run_thesis(
     console.print(f"[bold]Generating thesis for {ticker}[/bold]")
     console.print("[dim]Using Hedge Fund Pitch format[/dim]\n")
 
-    if ticker not in session.tickers:
-        session.tickers.append(ticker)
+    # Don't add raw ticker when Stampede is enabled
+    if not orchestrator.use_stampede:
+        if ticker not in session.tickers:
+            session.tickers.append(ticker)
 
     prompt = f"""Generate a complete investment thesis for {ticker} in the Hedge Fund Stock Pitch format.
 
@@ -1409,7 +1516,10 @@ Final investment assessment with expected return potential.
 Be specific with numbers and cite your sources."""
 
     await _execute_agent_query(
-        orchestrator, session, prompt, "pitch",
+        orchestrator,
+        session,
+        prompt,
+        "pitch",
         action="framework",
         suggestion_engine=suggestion_engine,
         tip_engine=tip_engine,
@@ -1430,8 +1540,10 @@ async def _run_summary(
     """Execute summary command."""
     console.print(f"[bold]Quick Summary: {ticker}[/bold]\n")
 
-    if ticker not in session.tickers:
-        session.tickers.append(ticker)
+    # Don't add raw ticker when Stampede is enabled
+    if not orchestrator.use_stampede:
+        if ticker not in session.tickers:
+            session.tickers.append(ticker)
 
     prompt = f"""Give me a quick summary of {ticker}. Keep it brief:
 
@@ -1444,7 +1556,10 @@ async def _run_summary(
 Keep the response under 300 words."""
 
     await _execute_agent_query(
-        orchestrator, session, prompt, None,
+        orchestrator,
+        session,
+        prompt,
+        None,
         action="research",
         suggestion_engine=suggestion_engine,
         tip_engine=tip_engine,
@@ -1470,8 +1585,11 @@ async def _run_debate(
     mode_str = "Deep" if deep_mode else "Quick"
     console.print(f"[bold]Bull vs. Bear Debate: {ticker}[/bold]")
     console.print(f"[dim]Mode: {mode_str} | Framework: {framework or 'None'}[/dim]")
-    console.print(f"[dim]Tip: You can coach agents at pause points (e.g., 'bear: mention delays')[/dim]\n")
+    console.print(
+        "[dim]Tip: You can coach agents at pause points (e.g., 'bear: mention delays')[/dim]\n"
+    )
 
+    # Debate doesn't use Stampede, so add ticker directly
     if ticker not in session.tickers:
         session.tickers.append(ticker)
 
@@ -1480,10 +1598,15 @@ async def _run_debate(
     if framework:
         try:
             from bullsh.frameworks.base import load_framework
+
             fw = load_framework(framework)
-            framework_context = f"Framework: {fw.display_name}\nCriteria: {', '.join(c.name for c in fw.criteria)}"
+            framework_context = (
+                f"Framework: {fw.display_name}\nCriteria: {', '.join(c.name for c in fw.criteria)}"
+            )
         except ValueError:
-            console.print(f"[yellow]Warning: Framework '{framework}' not found, proceeding without it[/yellow]")
+            console.print(
+                f"[yellow]Warning: Framework '{framework}' not found, proceeding without it[/yellow]"
+            )
 
     # Create debate coordinator
     coordinator = DebateCoordinator(
@@ -1515,7 +1638,7 @@ async def _run_debate(
                 # Show pause prompt
                 console.print(f"\n[dim]{'─' * 50}[/dim]")
                 console.print(f"[dim]{phase_display} complete. Press Enter to continue,[/dim]")
-                console.print(f"[dim]or type hint (e.g., 'bear: mention robotaxi delays')[/dim]")
+                console.print("[dim]or type hint (e.g., 'bear: mention robotaxi delays')[/dim]")
 
                 try:
                     user_input = await asyncio.get_event_loop().run_in_executor(
@@ -1530,9 +1653,13 @@ async def _run_debate(
                             coordinator.queue_hint(target, hint.strip())
                             console.print(f"[green]✓ Hint queued for {target}[/green]")
                         else:
-                            console.print(f"[yellow]Hint ignored (use 'bull:' or 'bear:' prefix)[/yellow]")
+                            console.print(
+                                "[yellow]Hint ignored (use 'bull:' or 'bear:' prefix)[/yellow]"
+                            )
                     elif user_input:
-                        console.print(f"[yellow]Hint ignored (use 'bull:' or 'bear:' prefix)[/yellow]")
+                        console.print(
+                            "[yellow]Hint ignored (use 'bull:' or 'bear:' prefix)[/yellow]"
+                        )
 
                 except (KeyboardInterrupt, EOFError):
                     console.print("\n[dim]Debate cancelled.[/dim]")
@@ -1551,7 +1678,9 @@ async def _run_debate(
         session_manager.save(session)
 
         # Show token usage
-        console.print(f"\n[dim]Debate complete. Tokens used: {coordinator.state.tokens_used:,}[/dim]")
+        console.print(
+            f"\n[dim]Debate complete. Tokens used: {coordinator.state.tokens_used:,}[/dim]"
+        )
 
         # Show suggestions and tips after debate
         if suggestion_engine and suggestion_state:
@@ -1632,7 +1761,9 @@ async def _execute_agent_query(
 
     except TokenLimitExceeded as e:
         console.print(f"\n[bold red]Token limit exceeded:[/bold red] {e}")
-        console.print("[dim]Use /usage to see current usage. Start a new session to continue.[/dim]")
+        console.print(
+            "[dim]Use /usage to see current usage. Start a new session to continue.[/dim]"
+        )
         session_manager.save(session)
     except Exception as e:
         console.print(f"\n[red]Error:[/red] {e}")
@@ -1761,7 +1892,9 @@ async def _handle_slash_command(
 
                 loaded = session_manager.load(match)
                 console.print(f"[green]Loaded session:[/green] {loaded.name}")
-                console.print(f"[dim]{len(loaded.messages)} messages, tickers: {', '.join(loaded.tickers)}[/dim]")
+                console.print(
+                    f"[dim]{len(loaded.messages)} messages, tickers: {', '.join(loaded.tickers)}[/dim]"
+                )
                 # Note: Full resume would require reinitializing orchestrator with history
                 return None
             except ValueError as e:
@@ -1784,7 +1917,11 @@ async def _handle_slash_command(
                     framework_override = parts[i + 1]
 
             await _run_research(
-                orchestrator, session, ticker, framework_override, config,
+                orchestrator,
+                session,
+                ticker,
+                framework_override,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -1816,7 +1953,11 @@ async def _handle_slash_command(
                 return None
 
             await _run_compare(
-                orchestrator, session, tickers, framework_override, config,
+                orchestrator,
+                session,
+                tickers,
+                framework_override,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -1832,7 +1973,10 @@ async def _handle_slash_command(
 
             ticker = parts[0].upper()
             await _run_thesis(
-                orchestrator, session, ticker, config,
+                orchestrator,
+                session,
+                ticker,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -1857,7 +2001,12 @@ async def _handle_slash_command(
                     framework_override = parts[i + 1]
 
             await _run_debate(
-                orchestrator, session, ticker, framework_override, deep_mode, config,
+                orchestrator,
+                session,
+                ticker,
+                framework_override,
+                deep_mode,
+                config,
                 suggestion_engine=suggestion_engine,
                 tip_engine=tip_engine,
                 suggestion_state=suggestion_state,
@@ -1875,9 +2024,9 @@ async def _handle_slash_command(
                     console.print(f"  Total entries: {stats['total_entries']}")
                     console.print(f"  Expired: {stats['expired_entries']}")
                     console.print(f"  Size: {stats['total_size_mb']} MB")
-                    if stats['by_source']:
+                    if stats["by_source"]:
                         console.print("  By source:")
-                        for src, count in stats['by_source'].items():
+                        for src, count in stats["by_source"].items():
                             console.print(f"    {src}: {count}")
                 case "list":
                     entries = cache.list_entries()[:10]
@@ -1891,7 +2040,9 @@ async def _handle_slash_command(
                         table.add_column("Hits")
                         table.add_column("Status")
                         for e in entries:
-                            status = "[red]Expired[/red]" if e["expired"] else "[green]Valid[/green]"
+                            status = (
+                                "[red]Expired[/red]" if e["expired"] else "[green]Valid[/green]"
+                            )
                             table.add_row(
                                 e["source"],
                                 e["ticker"] or "-",
@@ -1909,7 +2060,9 @@ async def _handle_slash_command(
                         console.print("[red]Usage: /cache refresh <ticker>[/red]")
                     else:
                         count = cache.invalidate_ticker(ticker.upper())
-                        console.print(f"[green]Invalidated {count} entries for {ticker.upper()}[/green]")
+                        console.print(
+                            f"[green]Invalidated {count} entries for {ticker.upper()}[/green]"
+                        )
                 case _:
                     console.print(f"[red]Unknown cache command: {subcmd}[/red]")
                     console.print("[dim]Available: stats, list, clear, refresh <ticker>[/dim]")
@@ -1921,6 +2074,7 @@ async def _handle_slash_command(
 
             try:
                 from bullsh.storage.vectordb import get_vectordb
+
                 vectordb = get_vectordb()
             except ImportError:
                 console.print("[red]RAG not available. Install with: pip install bullsh[rag][/red]")
@@ -1955,7 +2109,9 @@ async def _handle_slash_command(
                         console.print(table)
                 case "clear":
                     deleted = vectordb.clear()
-                    console.print(f"[green]Cleared vector database: {deleted} chunks deleted[/green]")
+                    console.print(
+                        f"[green]Cleared vector database: {deleted} chunks deleted[/green]"
+                    )
                     console.print("[dim]Filings will be re-indexed on next sec_fetch[/dim]")
                 case _:
                     console.print(f"[red]Unknown rag command: {subcmd}[/red]")
@@ -2001,17 +2157,19 @@ async def _handle_slash_command(
 
             # Auto-detect format from filename extension
             if filename:
-                if filename.endswith('.pdf'):
+                if filename.endswith(".pdf"):
                     format_type = "pdf"
-                elif filename.endswith('.docx') or filename.endswith('.doc'):
+                elif filename.endswith(".docx") or filename.endswith(".doc"):
                     format_type = "docx"
-                elif filename.endswith('.md'):
+                elif filename.endswith(".md"):
                     format_type = "md"
 
             ticker_str = "_".join(session.tickers[:3]) if session.tickers else "Research"
             title = f"{ticker_str} Investment Research"
 
-            console.print(f"[dim]Exporting session ({len(session.messages)} messages) to {format_type.upper()}...[/dim]")
+            console.print(
+                f"[dim]Exporting session ({len(session.messages)} messages) to {format_type.upper()}...[/dim]"
+            )
             result = await export_tool.export_content(
                 export_content,
                 filename=filename,
@@ -2043,7 +2201,9 @@ async def _handle_slash_command(
 
             console.print()
             console.print(f"[dim]{'─' * 60}[/dim]")
-            console.print(f"[bold {COLORS['secondary']}]Formatted Analysis[/bold {COLORS['secondary']}]")
+            console.print(
+                f"[bold {COLORS['secondary']}]Formatted Analysis[/bold {COLORS['secondary']}]"
+            )
             console.print(f"[dim]{'─' * 60}[/dim]")
             console.print()
             _display_formatted_response(last_response)
@@ -2073,69 +2233,79 @@ async def _handle_slash_command(
 
                 # Show framework-specific prompts
                 if fw_name == "piotroski":
-                    console.print(Panel(
-                        "[bold]Piotroski F-Score[/bold] - Financial Health Analysis\n\n"
-                        "This framework scores companies on 9 financial signals:\n"
-                        "• Profitability (4 pts): ROA, Cash Flow, Earnings Quality\n"
-                        "• Leverage (3 pts): Debt, Liquidity, Dilution\n"
-                        "• Efficiency (2 pts): Margins, Asset Turnover\n\n"
-                        "[cyan]To start, enter a ticker:[/cyan]\n"
-                        "  [dim]research AAPL[/dim]  or just  [dim]AAPL[/dim]",
-                        border_style="blue",
-                    ))
+                    console.print(
+                        Panel(
+                            "[bold]Piotroski F-Score[/bold] - Financial Health Analysis\n\n"
+                            "This framework scores companies on 9 financial signals:\n"
+                            "• Profitability (4 pts): ROA, Cash Flow, Earnings Quality\n"
+                            "• Leverage (3 pts): Debt, Liquidity, Dilution\n"
+                            "• Efficiency (2 pts): Margins, Asset Turnover\n\n"
+                            "[cyan]To start, enter a ticker:[/cyan]\n"
+                            "  [dim]research AAPL[/dim]  or just  [dim]AAPL[/dim]",
+                            border_style="blue",
+                        )
+                    )
                 elif fw_name == "porter":
-                    console.print(Panel(
-                        "[bold]Porter's Five Forces[/bold] - Competitive Analysis\n\n"
-                        "This framework analyzes competitive dynamics:\n"
-                        "• Threat of New Entrants\n"
-                        "• Supplier Power\n"
-                        "• Buyer Power\n"
-                        "• Threat of Substitutes\n"
-                        "• Competitive Rivalry\n\n"
-                        "[cyan]To start, enter a ticker:[/cyan]\n"
-                        "  [dim]research MSFT[/dim]  or just  [dim]MSFT[/dim]",
-                        border_style="blue",
-                    ))
+                    console.print(
+                        Panel(
+                            "[bold]Porter's Five Forces[/bold] - Competitive Analysis\n\n"
+                            "This framework analyzes competitive dynamics:\n"
+                            "• Threat of New Entrants\n"
+                            "• Supplier Power\n"
+                            "• Buyer Power\n"
+                            "• Threat of Substitutes\n"
+                            "• Competitive Rivalry\n\n"
+                            "[cyan]To start, enter a ticker:[/cyan]\n"
+                            "  [dim]research MSFT[/dim]  or just  [dim]MSFT[/dim]",
+                            border_style="blue",
+                        )
+                    )
                 elif fw_name == "pitch":
-                    console.print(Panel(
-                        "[bold]Hedge Fund Stock Pitch[/bold] - Thesis Format\n\n"
-                        "This framework structures a professional thesis:\n"
-                        "• Investment Thesis (1-2 sentences)\n"
-                        "• Key Catalysts\n"
-                        "• Valuation Analysis\n"
-                        "• Risk Factors\n\n"
-                        "[cyan]To start, enter a ticker:[/cyan]\n"
-                        "  [dim]thesis NVDA[/dim]  or  [dim]research NVDA[/dim]",
-                        border_style="blue",
-                    ))
+                    console.print(
+                        Panel(
+                            "[bold]Hedge Fund Stock Pitch[/bold] - Thesis Format\n\n"
+                            "This framework structures a professional thesis:\n"
+                            "• Investment Thesis (1-2 sentences)\n"
+                            "• Key Catalysts\n"
+                            "• Valuation Analysis\n"
+                            "• Risk Factors\n\n"
+                            "[cyan]To start, enter a ticker:[/cyan]\n"
+                            "  [dim]thesis NVDA[/dim]  or  [dim]research NVDA[/dim]",
+                            border_style="blue",
+                        )
+                    )
                 elif fw_name == "valuation":
-                    console.print(Panel(
-                        "[bold]Valuation Analysis[/bold] - Price Target Generation\n\n"
-                        "This framework calculates fair value using:\n"
-                        "• P/E Multiple (vs sector)\n"
-                        "• Forward P/E\n"
-                        "• EV/EBITDA Multiple\n"
-                        "• Analyst Consensus\n"
-                        "• Growth-Adjusted (PEG)\n\n"
-                        "Output: Bear / Base / Bull price targets\n\n"
-                        "[cyan]To start, enter a ticker:[/cyan]\n"
-                        "  [dim]research TSLA[/dim]  or just  [dim]TSLA[/dim]",
-                        border_style="blue",
-                    ))
+                    console.print(
+                        Panel(
+                            "[bold]Valuation Analysis[/bold] - Price Target Generation\n\n"
+                            "This framework calculates fair value using:\n"
+                            "• P/E Multiple (vs sector)\n"
+                            "• Forward P/E\n"
+                            "• EV/EBITDA Multiple\n"
+                            "• Analyst Consensus\n"
+                            "• Growth-Adjusted (PEG)\n\n"
+                            "Output: Bear / Base / Bull price targets\n\n"
+                            "[cyan]To start, enter a ticker:[/cyan]\n"
+                            "  [dim]research TSLA[/dim]  or just  [dim]TSLA[/dim]",
+                            border_style="blue",
+                        )
+                    )
                 elif fw_name == "factors":
-                    console.print(Panel(
-                        "[bold]Multi-Factor Stock Analysis[/bold] - Educational Session\n\n"
-                        "This interactive session guides you through:\n"
-                        "• Ticker & Peer Selection (2-6 comparable companies)\n"
-                        "• Factor Selection (Value, Momentum, Quality, Growth, Size, Volatility)\n"
-                        "• Cross-sectional Z-score calculations\n"
-                        "• Risk decomposition & variance attribution\n"
-                        "• Scenario analysis (Rate Shock, Risk-Off, Recession, Cyclical)\n"
-                        "• Excel workbook generation (9 tabs)\n\n"
-                        "A finance professor will explain each step.\n\n"
-                        "[cyan]To start, enter a US stock ticker.[/cyan]",
-                        border_style="blue",
-                    ))
+                    console.print(
+                        Panel(
+                            "[bold]Multi-Factor Stock Analysis[/bold] - Educational Session\n\n"
+                            "This interactive session guides you through:\n"
+                            "• Ticker & Peer Selection (2-6 comparable companies)\n"
+                            "• Factor Selection (Value, Momentum, Quality, Growth, Size, Volatility)\n"
+                            "• Cross-sectional Z-score calculations\n"
+                            "• Risk decomposition & variance attribution\n"
+                            "• Scenario analysis (Rate Shock, Risk-Off, Recession, Cyclical)\n"
+                            "• Excel workbook generation (9 tabs)\n\n"
+                            "A finance professor will explain each step.\n\n"
+                            "[cyan]To start, enter a US stock ticker.[/cyan]",
+                            border_style="blue",
+                        )
+                    )
                     # Return special signal to start factor session
                     return "framework:factors:start"
                 else:
@@ -2152,6 +2322,7 @@ async def _handle_slash_command(
                 console.print("[dim]No framework selected - use /framework to set one[/dim]")
             else:
                 from bullsh.frameworks.base import load_framework
+
                 try:
                     fw = load_framework(current_framework)
                     console.print(fw.to_checklist_display())
@@ -2168,7 +2339,9 @@ async def _handle_slash_command(
             if not parts:
                 # No args: use ALL session tickers
                 if not session.tickers:
-                    console.print("[red]No tickers in this session. Run research first or specify a ticker:[/red]")
+                    console.print(
+                        "[red]No tickers in this session. Run research first or specify a ticker:[/red]"
+                    )
                     console.print("[dim]  /excel TSLA[/dim]")
                     console.print("[dim]  /excel compare AAPL MSFT[/dim]")
                     return None
@@ -2178,7 +2351,9 @@ async def _handle_slash_command(
                     console.print(f"[dim]Generating Excel for {tickers[0]} (from session)...[/dim]")
                     result = await excel_tool.generate_excel(tickers[0])
                 else:
-                    console.print(f"[dim]Generating comparison Excel for {', '.join(tickers)} (from session)...[/dim]")
+                    console.print(
+                        f"[dim]Generating comparison Excel for {', '.join(tickers)} (from session)...[/dim]"
+                    )
                     result = await excel_tool.generate_excel(
                         tickers[0],
                         include_ratios=True,
@@ -2190,7 +2365,9 @@ async def _handle_slash_command(
                 # Warn if tickers not in session
                 missing = [t for t in tickers if t not in session.tickers]
                 if missing:
-                    console.print(f"[yellow]⚠ Tickers not researched in this session: {', '.join(missing)}[/yellow]")
+                    console.print(
+                        f"[yellow]⚠ Tickers not researched in this session: {', '.join(missing)}[/yellow]"
+                    )
                     console.print("[dim]Data will be fetched fresh (not from session cache)[/dim]")
                 console.print(f"[dim]Generating comparison Excel for {', '.join(tickers)}...[/dim]")
                 result = await excel_tool.generate_excel(
@@ -2226,10 +2403,10 @@ def _display_formatted_response(content: str) -> None:
 
     # Check if response looks like structured analysis (has headers, lists)
     has_structure = (
-        "##" in content or
-        "**" in content or
-        re.search(r'^\d+[.\)]\s', content, re.MULTILINE) or
-        re.search(r'^[-*]\s', content, re.MULTILINE)
+        "##" in content
+        or "**" in content
+        or re.search(r"^\d+[.\)]\s", content, re.MULTILINE)
+        or re.search(r"^[-*]\s", content, re.MULTILINE)
     )
 
     if has_structure:
@@ -2239,6 +2416,7 @@ def _display_formatted_response(content: str) -> None:
     else:
         # Simple response - just clean it up a bit
         from bullsh.ui.formatter import _process_inline_formatting
+
         lines = content.strip().split("\n")
         for line in lines:
             if line.strip():
@@ -2455,7 +2633,7 @@ def _show_usage(orchestrator: Orchestrator, config: Config) -> None:
     history_len = len(orchestrator.history)
     history_status = "OK"
     if history_len >= config.max_history_messages:
-        history_status = f"[yellow]sliding window active[/yellow]"
+        history_status = "[yellow]sliding window active[/yellow]"
 
     usage_text = f"""
 [bold]Session Token Usage[/bold]

@@ -5,87 +5,79 @@ from rich.theme import Theme
 # Color palette - finance terminal aesthetic (dark mode)
 COLORS = {
     # Primary colors
-    "bull": "#00ff88",          # Bright green - positive/bullish
-    "bear": "#ff4466",          # Red - negative/bearish
-    "neutral": "#ffaa00",       # Amber/gold - neutral/caution
-
+    "bull": "#00ff88",  # Bright green - positive/bullish
+    "bear": "#ff4466",  # Red - negative/bearish
+    "neutral": "#ffaa00",  # Amber/gold - neutral/caution
     # UI colors
-    "primary": "#00ff88",       # Main accent (green)
-    "secondary": "#00d4ff",     # Cyan - secondary accent
-    "accent": "#aa88ff",        # Purple - highlights
-
+    "primary": "#00ff88",  # Main accent (green)
+    "secondary": "#00d4ff",  # Cyan - secondary accent
+    "accent": "#aa88ff",  # Purple - highlights
     # Text colors
-    "text": "#e0e0e0",          # Main text
-    "text_muted": "#666666",    # Dimmed text
-    "text_bright": "#ffffff",   # Bright white
-
+    "text": "#e0e0e0",  # Main text
+    "text_muted": "#666666",  # Dimmed text
+    "text_bright": "#ffffff",  # Bright white
     # Backgrounds
-    "bg": "#0a0a0a",            # Near black
-    "bg_panel": "#1a1a1a",      # Panel background
+    "bg": "#0a0a0a",  # Near black
+    "bg_panel": "#1a1a1a",  # Panel background
     "bg_highlight": "#2a2a2a",  # Highlighted row
-
     # Semantic
     "success": "#00ff88",
     "error": "#ff4466",
     "warning": "#ffaa00",
     "info": "#00d4ff",
-
     # Data source colors
-    "sec": "#00d4ff",           # SEC filings
-    "yahoo": "#aa88ff",         # Yahoo Finance
-    "social": "#ff88aa",        # Social media
-    "news": "#ffaa00",          # News
+    "sec": "#00d4ff",  # SEC filings
+    "yahoo": "#aa88ff",  # Yahoo Finance
+    "social": "#ff88aa",  # Social media
+    "news": "#ffaa00",  # News
 }
 
 
 # Rich theme for console
-RICH_THEME = Theme({
-    # Base styles
-    "info": f"{COLORS['info']}",
-    "warning": f"{COLORS['warning']}",
-    "error": f"bold {COLORS['error']}",
-    "success": f"{COLORS['success']}",
-
-    # Custom styles
-    "bull": f"bold {COLORS['bull']}",
-    "bear": f"bold {COLORS['bear']}",
-    "ticker": f"bold {COLORS['primary']}",
-    "price": f"{COLORS['text_bright']}",
-    "percent_up": f"bold {COLORS['bull']}",
-    "percent_down": f"bold {COLORS['bear']}",
-
-    # UI elements
-    "header": f"bold {COLORS['primary']}",
-    "subheader": f"italic {COLORS['secondary']}",
-    "muted": f"{COLORS['text_muted']}",
-    "highlight": f"bold {COLORS['accent']}",
-
-    # Tool status
-    "tool.name": f"bold {COLORS['secondary']}",
-    "tool.success": f"{COLORS['success']}",
-    "tool.fail": f"{COLORS['error']}",
-    "tool.cached": f"italic {COLORS['text_muted']}",
-
-    # Framework
-    "framework.name": f"bold {COLORS['accent']}",
-    "framework.score": f"bold {COLORS['primary']}",
-
-    # Sources
-    "source.sec": f"{COLORS['sec']}",
-    "source.yahoo": f"{COLORS['yahoo']}",
-    "source.social": f"{COLORS['social']}",
-    "source.news": f"{COLORS['news']}",
-})
+RICH_THEME = Theme(
+    {
+        # Base styles
+        "info": f"{COLORS['info']}",
+        "warning": f"{COLORS['warning']}",
+        "error": f"bold {COLORS['error']}",
+        "success": f"{COLORS['success']}",
+        # Custom styles
+        "bull": f"bold {COLORS['bull']}",
+        "bear": f"bold {COLORS['bear']}",
+        "ticker": f"bold {COLORS['primary']}",
+        "price": f"{COLORS['text_bright']}",
+        "percent_up": f"bold {COLORS['bull']}",
+        "percent_down": f"bold {COLORS['bear']}",
+        # UI elements
+        "header": f"bold {COLORS['primary']}",
+        "subheader": f"italic {COLORS['secondary']}",
+        "muted": f"{COLORS['text_muted']}",
+        "highlight": f"bold {COLORS['accent']}",
+        # Tool status
+        "tool.name": f"bold {COLORS['secondary']}",
+        "tool.success": f"{COLORS['success']}",
+        "tool.fail": f"{COLORS['error']}",
+        "tool.cached": f"italic {COLORS['text_muted']}",
+        # Framework
+        "framework.name": f"bold {COLORS['accent']}",
+        "framework.score": f"bold {COLORS['primary']}",
+        # Sources
+        "source.sec": f"{COLORS['sec']}",
+        "source.yahoo": f"{COLORS['yahoo']}",
+        "source.social": f"{COLORS['social']}",
+        "source.news": f"{COLORS['news']}",
+    }
+)
 
 
 # prompt_toolkit style for input
 PROMPT_STYLE = {
-    'prompt': f'bold {COLORS["primary"]}',
-    'completion-menu': f'bg:{COLORS["bg_panel"]} {COLORS["text"]}',
-    'completion-menu.completion': f'bg:{COLORS["bg_panel"]} {COLORS["text"]}',
-    'completion-menu.completion.current': f'bg:{COLORS["bg_highlight"]} {COLORS["text_bright"]} bold',
-    'completion-menu.meta': f'bg:{COLORS["bg_panel"]} {COLORS["text_muted"]} italic',
-    'completion-menu.meta.current': f'bg:{COLORS["bg_highlight"]} {COLORS["secondary"]} italic',
+    "prompt": f"bold {COLORS['primary']}",
+    "completion-menu": f"bg:{COLORS['bg_panel']} {COLORS['text']}",
+    "completion-menu.completion": f"bg:{COLORS['bg_panel']} {COLORS['text']}",
+    "completion-menu.completion.current": f"bg:{COLORS['bg_highlight']} {COLORS['text_bright']} bold",
+    "completion-menu.meta": f"bg:{COLORS['bg_panel']} {COLORS['text_muted']} italic",
+    "completion-menu.meta.current": f"bg:{COLORS['bg_highlight']} {COLORS['secondary']} italic",
 }
 
 
@@ -147,8 +139,8 @@ BOX = {
     "tr": "╮",  # top-right
     "bl": "╰",  # bottom-left
     "br": "╯",  # bottom-right
-    "h": "─",   # horizontal
-    "v": "│",   # vertical
+    "h": "─",  # horizontal
+    "v": "│",  # vertical
     "cross": "┼",
     "t_down": "┬",
     "t_up": "┴",

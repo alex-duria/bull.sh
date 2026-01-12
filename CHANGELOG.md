@@ -4,6 +4,162 @@ All notable changes to bullsh will be documented in this file. Written in plain 
 
 ---
 
+## 2026-01-12 - Stampede Bug Fixes & PR Cleanup
+
+**Developer**: Alexander Duria
+
+### Fixed
+
+- **Export crash with optional dependencies**: Fixed `NameError: name 'Table' is not defined` in `export.py`. The `Table` return type annotation was evaluated at import time when reportlab wasn't installed. Added `from __future__ import annotations` to defer annotation evaluation.
+
+- **Ticker resolution (company name vs symbol)**: When users typed "Tesla" instead of "TSLA", the export tool tried to use "TESLA" as the ticker symbol. Fixed by:
+  - Enhancing Understanding prompt to explicitly resolve company names to actual ticker symbols
+  - Adding ticker sync from Stampede's resolved tickers to session in orchestrator
+  - Modified REPL commands to not add raw user input as tickers when Stampede is enabled
+
+### Changed
+
+- **Executor cleanup**: Removed outdated "to be implemented" comments for financials and insiders tools since they're now fully implemented.
+
+- **Code formatting**: Ran ruff check with auto-fix (132 fixes) and ruff format across all files.
+
+### Documentation
+
+- Updated `README.md` with Stampede architecture diagram and new file structure
+- Updated `CLAUDE.md` with Stampede section explaining the Plan→Execute→Reflect loop
+
+### Files Modified
+
+- `bullsh/tools/export.py` - Added deferred annotations
+- `bullsh/agent/stampede/understanding.py` - Enhanced company name → ticker resolution
+- `bullsh/agent/stampede/executor.py` - Removed outdated comments
+- `bullsh/agent/orchestrator.py` - Added ticker sync from Stampede to session
+- `bullsh/ui/repl.py` - Skip adding raw tickers when Stampede enabled
+- `README.md` - Added Stampede architecture
+- `CLAUDE.md` - Added Stampede documentation
+
+---
+
+## 2026-01-10 - Stampede: Reasoning Agent Architecture
+
+**Developer**: Alexander Duria
+
+### Added
+
+**New Stampede Agent Architecture** (`bullsh/agent/stampede/`)
+
+A complete Plan→Execute→Reflect loop inspired by Dexter, but enhanced with Bull.sh's richer data sources and framework-aware planning.
+
+- **Understanding Phase** (`understanding.py`): Extracts intent, tickers, depth, and export intent from queries
+  - Confidence scoring with <0.8 threshold for clarification questions
+  - Session memory awareness (prior tickers, frameworks)
+  - Depth inference: quick (0-task), standard (2-5 tasks), deep (5-10 tasks)
+
+- **Planning Phase** (`planner.py`): Framework-aware task decomposition
+  - Creates 1-10 structured tasks with dependencies
+  - Framework-specific planning (Piotroski = 9 signals, Porter = 5 forces)
+  - Fresh plan each iteration based on reflection guidance
+
+- **Task Executor** (`executor.py`): Dependency-aware parallel execution
+  - Runs independent tasks in parallel via asyncio.gather
+  - Retry once on failure, then skip
+  - RAG-first policy for SEC filing content
+  - Supports both `use_tools` and `reason` task types
+
+- **Reflection Phase** (`reflector.py`): Self-validation with "default to complete" philosophy
+  - Only marks incomplete if CRITICAL data missing
+  - Generates guidance for next planning iteration
+  - Visible to user: shows reasoning and missing info
+
+- **Synthesizer** (`synthesizer.py`): Streaming final response generation
+  - Leads with key finding
+  - Uses specific numbers with context
+  - Sources cited at end
+  - Export-aware structuring
+
+- **Main Loop** (`loop.py`): Orchestrates full cycle
+  - Max 5 iterations (configurable)
+  - Simple query shortcut (0-task direct answer)
+  - Abort signal support
+  - Session memory tracking
+
+**New Data Tools**
+
+- **Unified Financials Tool** (`tools/financials.py`)
+  - Primary: Financial Datasets API (if configured)
+  - Fallback: Yahoo Finance
+  - Returns: income statement, balance sheet, cash flow, computed ratios
+
+- **Insider Transactions Tool** (`tools/insiders.py`)
+  - Fetches insider buy/sell activity from Financial Datasets API
+  - Summarizes transactions with sentiment indicator (bullish/bearish/neutral)
+  - Notable insiders and transaction values
+
+**Configuration**
+
+- Added `FINANCIAL_DATASETS_API_KEY` support in config
+- Updated `.env` template with Financial Datasets API key option
+
+### Files Created
+
+- `bullsh/agent/stampede/__init__.py`
+- `bullsh/agent/stampede/schemas.py` - Pydantic models (Understanding, Task, TaskPlan, TaskResult, ReflectionResult)
+- `bullsh/agent/stampede/understanding.py`
+- `bullsh/agent/stampede/planner.py`
+- `bullsh/agent/stampede/executor.py`
+- `bullsh/agent/stampede/reflector.py`
+- `bullsh/agent/stampede/synthesizer.py`
+- `bullsh/agent/stampede/loop.py`
+- `bullsh/tools/financials.py`
+- `bullsh/tools/insiders.py`
+
+### Files Modified
+
+- `bullsh/config.py` - Added `financial_datasets_api_key` field and env template
+
+### Architecture
+
+```
+User Query
+    ↓
+[UNDERSTAND] → confidence < 0.8? → ask clarification
+    ↓
+[CLASSIFY DEPTH] → quick? → 0-task direct answer
+    ↓
+┌─────────────────────────────────────┐
+│   ITERATION LOOP (max 5)            │
+│                                     │
+│   [PLAN] → creates 1-10 tasks       │
+│      ↓                              │
+│   [EXECUTE] → parallel, retry once  │
+│      ↓                              │
+│   [REFLECT] → complete? → exit      │
+│      ↓                              │
+│   guidance → back to PLAN           │
+└─────────────────────────────────────┘
+    ↓
+[SYNTHESIZE] → streaming response
+```
+
+### Integration
+
+- **Orchestrator** now uses Stampede by default (`use_stampede=True`)
+- Falls back to legacy tool loop if Stampede fails or for special flows (system_override, factor sessions)
+- All 16 tools registered and available (14 original + 2 new)
+- Rich-formatted progress messages display correctly in REPL
+
+### Testing
+
+```bash
+# Verify imports
+python -c "from bullsh.agent import StampedeLoop; print('OK')"
+
+# Check tool count
+python -c "from bullsh.tools.base import ALL_TOOLS; print(len(ALL_TOOLS))"  # Should be 16
+```
+
+---
+
 ## 2026-01-10 - Agent Communication Enhancement: Proactive Suggestions
 
 **Developer**: Alexander Duria

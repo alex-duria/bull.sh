@@ -36,7 +36,7 @@ mypy bullsh/                        # Type check (strict mode)
 
 ## Architecture
 
-Uses a **hybrid orchestrator pattern** with task-based subagents for parallelism and context efficiency.
+Uses **Stampede**, an autonomous Plan→Execute→Reflect loop for research orchestration.
 
 ```
 bullsh/
@@ -44,10 +44,18 @@ bullsh/
 ├── config.py           # Load .env (secrets) + config.toml (prefs)
 ├── logging.py          # Debug logging with filtering
 ├── agent/
-│   ├── orchestrator.py # Lightweight dispatcher, handles tool loop (max 15 iterations)
+│   ├── orchestrator.py # Main dispatcher, integrates Stampede loop
 │   ├── base.py         # SubAgent ABC with bounded iterations
 │   ├── research.py     # Single-company deep dive subagent
-│   └── compare.py      # Multi-company parallel research subagent
+│   ├── compare.py      # Multi-company parallel research subagent
+│   └── stampede/       # Autonomous Plan→Execute→Reflect architecture
+│       ├── schemas.py      # Pydantic models (Understanding, Task, TaskPlan, etc.)
+│       ├── understanding.py # Query comprehension with confidence scoring
+│       ├── planner.py      # Task decomposition with framework awareness
+│       ├── executor.py     # Dependency-aware parallel task execution
+│       ├── reflector.py    # Self-validation with "default to complete" philosophy
+│       ├── synthesizer.py  # Streaming response generation
+│       └── loop.py         # Main orchestration loop
 ├── factors/            # Multi-factor analysis module (pure Python math)
 │   ├── calculator.py   # Z-score calculations across factors
 │   ├── regression.py   # Fama-French factor regression
@@ -70,7 +78,9 @@ bullsh/
 │   ├── excel.py        # Excel spreadsheet generation
 │   ├── export.py       # PDF/DOCX export
 │   ├── factors.py      # Factor calculation tool wrapper
-│   └── thesis.py       # Thesis export with YAML frontmatter provenance
+│   ├── thesis.py       # Thesis export with YAML frontmatter provenance
+│   ├── financials.py   # Unified financial statements (Financial Datasets API → Yahoo fallback)
+│   └── insiders.py     # Insider transactions from Financial Datasets API
 ├── ui/
 │   ├── repl.py         # Interactive loop with Rich + prompt_toolkit
 │   ├── intro.py        # Animated candlestick intro
@@ -108,11 +118,49 @@ The `factors/` module provides multi-factor stock analysis with pure Python calc
 
 The module uses a state machine (`FactorSession`) with stages: TICKER_INPUT → PEER_SELECTION → FACTOR_ANALYSIS → REGRESSION → SCENARIOS
 
+## Stampede Architecture
+
+Stampede is the autonomous research loop that powers bullsh. It implements a Plan→Execute→Reflect cycle inspired by how expert analysts work.
+
+```
+User Query
+    │
+    ▼
+┌──────────────┐
+│  UNDERSTAND  │  ← Extract intent, tickers, depth, confidence
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────────────────────┐
+│    ITERATION LOOP (max 5)            │
+│  ┌────────┐  ┌─────────┐  ┌────────┐ │
+│  │  PLAN  │→ │ EXECUTE │→ │REFLECT │ │
+│  └────────┘  └─────────┘  └────────┘ │
+│       ▲                       │      │
+│       └── guidance ◄──────────┘      │
+│                                      │
+│  is_complete? → YES → EXIT LOOP      │
+└──────────────────────────────────────┘
+       │
+       ▼
+┌──────────────┐
+│  SYNTHESIZE  │  ← Stream final response
+└──────────────┘
+```
+
+**Key Features:**
+- **Confidence-based clarification**: If understanding confidence < 0.8, asks user to clarify
+- **Simple query shortcuts**: Quick lookups bypass planning entirely
+- **Framework-aware planning**: Piotroski gets 9-signal tasks, Porter gets competitive analysis tasks
+- **Dependency-aware parallelism**: Independent tasks run in parallel via `asyncio.gather`
+- **Self-reflection**: "Default to complete" philosophy - only iterates if critical data missing
+- **Company name resolution**: "Tesla" → "TSLA", "Apple" → "AAPL" automatically
+
 ## Key Design Decisions
 
+- **Stampede by default**: Orchestrator uses Stampede loop for autonomous research; legacy tool loop still available
 - **Frameworks as compass**: Guide conversation without limiting exploration; users can override assessments
-- **Hybrid orchestrator**: Lightweight dispatcher routes to task-based subagents (research, compare)
-- **Bounded iterations**: Max 15 tool iterations in orchestrator, max 10 per subagent
+- **Bounded iterations**: Max 5 Stampede iterations (Plan→Execute→Reflect); max 15 fallback tool iterations
 - **Parallel in compare**: Compare agent spawns research subagents in parallel (one per company)
 - **Graceful degradation**: Failed tools noted in response with confidence scores, never blocks flow
 - **Single API key**: Only Anthropic API required; all data sources are free/scraped

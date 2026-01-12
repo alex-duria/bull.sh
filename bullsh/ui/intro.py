@@ -3,25 +3,24 @@
 import asyncio
 import math
 import random
-from typing import Callable
+from collections.abc import Callable
 
-from rich.console import Console
-from rich.live import Live
-from rich.text import Text
 from rich.align import Align
+from rich.console import Console
+from rich.text import Text
 
 console = Console()
 
 # Color theme - finance terminal aesthetic
 THEME = {
-    "primary": "#00ff88",      # Bright green (bull)
-    "secondary": "#00d4ff",    # Cyan
-    "accent": "#ffaa00",       # Gold/amber
-    "bearish": "#ff4444",      # Red (bear)
-    "muted": "#666666",        # Gray
-    "dim": "#333333",          # Dark gray
-    "bg": "#0a0a0a",           # Near black
-    "grid": "#1a1a1a",         # Grid lines
+    "primary": "#00ff88",  # Bright green (bull)
+    "secondary": "#00d4ff",  # Cyan
+    "accent": "#ffaa00",  # Gold/amber
+    "bearish": "#ff4444",  # Red (bear)
+    "muted": "#666666",  # Gray
+    "dim": "#333333",  # Dark gray
+    "bg": "#0a0a0a",  # Near black
+    "grid": "#1a1a1a",  # Grid lines
 }
 
 # ASCII Art Logo - pixel/block style
@@ -74,14 +73,16 @@ def generate_market_data(num_candles: int = 100, volatility: float = 0.025) -> d
         base_volume = random.uniform(0.3, 1.0)
         volume = base_volume * (1 + abs(change) / price * 10)
 
-        candles.append({
-            "open": open_price,
-            "high": high,
-            "low": low,
-            "close": close_price,
-            "volume": volume,
-            "bullish": close_price >= open_price,
-        })
+        candles.append(
+            {
+                "open": open_price,
+                "high": high,
+                "low": low,
+                "close": close_price,
+                "volume": volume,
+                "bullish": close_price >= open_price,
+            }
+        )
         price = close_price
 
     return {
@@ -240,7 +241,7 @@ def render_full_chart(
     if show_ticker:
         header = Text()
         header.append(f"  {ticker}", style=f"bold {THEME['primary']}")
-        header.append(f"  ${current_price:,.2f}", style=f"bold white")
+        header.append(f"  ${current_price:,.2f}", style="bold white")
 
         if price_change >= 0:
             header.append(f"  ▲ +{price_change:.2f}%", style=f"bold {THEME['primary']}")
@@ -337,10 +338,17 @@ def render_intro_frame(
             bar.append("  ")
 
             # Scrolling ticker tape effect
-            tape_items = ["AAPL +2.3%", "NVDA +5.1%", "TSLA -1.2%", "MSFT +0.8%", "GOOGL +1.5%", "AMZN +3.2%"]
+            tape_items = [
+                "AAPL +2.3%",
+                "NVDA +5.1%",
+                "TSLA -1.2%",
+                "MSFT +0.8%",
+                "GOOGL +1.5%",
+                "AMZN +3.2%",
+            ]
             tape_offset = int(frame * 2) % (len(tape_items) * 15)
             tape_str = "  •  ".join(tape_items * 3)
-            visible_tape = tape_str[tape_offset:tape_offset + width - 4]
+            visible_tape = tape_str[tape_offset : tape_offset + width - 4]
 
             for item in visible_tape.split("  •  "):
                 item = item.strip()
@@ -480,7 +488,11 @@ def render_final_welcome(width: int, height: int) -> Text:
     for hint in hints:
         if hint.startswith("Quick Start"):
             output.append(hint, style="bold")
-        elif hint.startswith("  research") or hint.startswith("  compare") or hint.startswith("  /framework"):
+        elif (
+            hint.startswith("  research")
+            or hint.startswith("  compare")
+            or hint.startswith("  /framework")
+        ):
             # Parse and color the hint
             parts = hint.split("    ")
             if len(parts) >= 2:
@@ -503,7 +515,7 @@ def render_final_welcome(width: int, height: int) -> Text:
         output.append("\n")
 
     # Ready indicator
-    output.append(f"✓ Ready\n", style=f"bold {THEME['primary']}")
+    output.append("✓ Ready\n", style=f"bold {THEME['primary']}")
 
     return output
 
@@ -522,8 +534,8 @@ async def play_intro_animation(
     Returns:
         True if animation completed (welcome screen is displayed)
     """
-    import sys
     import os
+    import sys
 
     # Enable ANSI escape codes on Windows
     if sys.platform == "win32":
@@ -542,10 +554,10 @@ async def play_intro_animation(
     frame_delay = 1.0 / fps
 
     # ANSI escape codes for flicker-free rendering
-    CURSOR_HOME = "\033[H"      # Move cursor to top-left
-    CLEAR_SCREEN = "\033[2J"    # Clear entire screen
-    HIDE_CURSOR = "\033[?25l"   # Hide cursor
-    SHOW_CURSOR = "\033[?25h"   # Show cursor
+    CURSOR_HOME = "\033[H"  # Move cursor to top-left
+    CLEAR_SCREEN = "\033[2J"  # Clear entire screen
+    HIDE_CURSOR = "\033[?25l"  # Hide cursor
+    SHOW_CURSOR = "\033[?25h"  # Show cursor
 
     skipped = False
 
@@ -581,7 +593,7 @@ async def play_intro_animation(
             # Pad each line to full width to overwrite previous content
             for line in rendered.split("\n"):
                 # Strip ANSI codes to get true length, then pad
-                padded = line + " " * max(0, term_width - len(line.encode('utf-8').decode('utf-8')))
+                padded = line + " " * max(0, term_width - len(line.encode("utf-8").decode("utf-8")))
                 lines.append(padded)
 
             # Ensure we fill the screen height
@@ -636,21 +648,9 @@ def show_static_banner(compact: bool = False) -> None:
     console.print()
     console.print(Align.center(logo))
     console.print()
-    console.print(
-        Align.center(
-            Text(TAGLINE, style=f"italic {THEME['secondary']}")
-        )
-    )
-    console.print(
-        Align.center(
-            Text(SUBTITLE, style=f"dim")
-        )
-    )
-    console.print(
-        Align.center(
-            Text("─" * 40, style=f"{THEME['muted']}")
-        )
-    )
+    console.print(Align.center(Text(TAGLINE, style=f"italic {THEME['secondary']}")))
+    console.print(Align.center(Text(SUBTITLE, style="dim")))
+    console.print(Align.center(Text("─" * 40, style=f"{THEME['muted']}")))
     console.print()
 
     # Credit with heart

@@ -3,7 +3,7 @@
 import asyncio
 from typing import Any
 
-from bullsh.agent.base import SubAgent, AgentResult
+from bullsh.agent.base import AgentResult, SubAgent
 from bullsh.agent.research import ResearchAgent
 from bullsh.config import Config
 from bullsh.logging import log
@@ -101,9 +101,7 @@ Be objective and data-driven. Cite specific numbers from the research."""
                 )
 
             # Phase 2: Synthesize comparison
-            comparison = await self._synthesize_comparison(
-                task, research_results, total_tokens
-            )
+            comparison = await self._synthesize_comparison(task, research_results, total_tokens)
 
             return comparison
 
@@ -170,17 +168,22 @@ Be efficient - gather key data quickly for comparison."""
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 log("agent", f"Research failed for {tickers[i]}: {result}", level="error")
-                processed_results.append(AgentResult(
-                    content="",
-                    tool_results=[],
-                    ticker=tickers[i],
-                    success=False,
-                    error=str(result),
-                ))
+                processed_results.append(
+                    AgentResult(
+                        content="",
+                        tool_results=[],
+                        ticker=tickers[i],
+                        success=False,
+                        error=str(result),
+                    )
+                )
             else:
                 processed_results.append(result)
 
-        log("agent", f"Parallel research complete: {len([r for r in processed_results if r.success])}/{len(tickers)} successful")
+        log(
+            "agent",
+            f"Parallel research complete: {len([r for r in processed_results if r.success])}/{len(tickers)} successful",
+        )
         return processed_results
 
     async def _synthesize_comparison(
@@ -224,7 +227,7 @@ Be efficient - gather key data quickly for comparison."""
 
 ---
 
-Now provide a comprehensive comparison of {', '.join(tickers)}.
+Now provide a comprehensive comparison of {", ".join(tickers)}.
 Focus on answering the user's question with specific data from the research."""
 
         messages = [{"role": "user", "content": synthesis_prompt}]

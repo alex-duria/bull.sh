@@ -13,6 +13,7 @@ from bullsh.storage.sessions import Session, get_session_manager
 
 class FactorStage(Enum):
     """The 8 stages of factor analysis plus completion."""
+
     TICKER_SELECTION = 1
     PEER_SELECTION = 2
     FACTOR_WEIGHTING = 3
@@ -51,12 +52,12 @@ class FactorStage(Enum):
 
 # Default equal weights for all 6 factors
 DEFAULT_WEIGHTS = {
-    "value": 1/6,
-    "momentum": 1/6,
-    "quality": 1/6,
-    "growth": 1/6,
-    "size": 1/6,
-    "volatility": 1/6,
+    "value": 1 / 6,
+    "momentum": 1 / 6,
+    "quality": 1 / 6,
+    "growth": 1 / 6,
+    "size": 1 / 6,
+    "volatility": 1 / 6,
 }
 
 # All available factors
@@ -71,6 +72,7 @@ class FactorState:
     Persisted in Session.metadata['factors'].
     Designed to be small (~2KB JSON) - only computed results stored.
     """
+
     # Current stage
     stage: FactorStage = FactorStage.TICKER_SELECTION
 
@@ -243,7 +245,7 @@ class FactorSession:
         else:
             # Equal weight
             n = len(factors)
-            self.state.weights = {f: 1/n for f in factors}
+            self.state.weights = dict.fromkeys(factors, 1 / n)
         self.save()
 
     def set_factor_scores(self, scores: dict[str, dict[str, float]]) -> None:
@@ -287,6 +289,7 @@ class FactorSession:
     def mark_complete(self) -> None:
         """Mark analysis as complete."""
         from datetime import datetime
+
         self.state.stage = FactorStage.COMPLETE
         self.state.completed_at = datetime.now().isoformat()
         self.save()

@@ -1,8 +1,8 @@
 """CLI entry point using Typer."""
 
+import logging
 import os
 import warnings
-import logging
 
 # Suppress HuggingFace progress bars and downloads (must be before any HF imports)
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -33,7 +33,7 @@ logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -41,7 +41,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from bullsh import __version__
-from bullsh.config import ConfigError, create_initial_env, get_config, load_config
+from bullsh.config import ConfigError, create_initial_env, load_config
 
 app = typer.Typer(
     name="bullsh",
@@ -71,12 +71,13 @@ def main(
     debug: Annotated[
         bool,
         typer.Option(
-            "--debug", "-d",
+            "--debug",
+            "-d",
             help="Enable debug logging to file",
         ),
     ] = False,
     debug_filter: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--debug-filter",
             help="Filter debug logs: 'tools,api' or '!cache'",
@@ -129,25 +130,27 @@ def _start_repl(
     # Set up debug logging if enabled
     if debug:
         from bullsh.logging import setup_logging
+
         log_file = setup_logging(config.logs_dir, debug=True, debug_filter=debug_filter)
         console.print(f"[dim]Debug logging to: {log_file}[/dim]")
 
     # REPL shows its own welcome banner
     from bullsh.ui.repl import run_repl
+
     run_repl(config, framework=framework, skip_intro=skip_intro)
 
 
 def _first_run_setup() -> None:
     """Interactive first-run setup to collect required config."""
-    console.print(Panel.fit(
-        "[bold]Welcome to bullsh![/bold]\n\n"
-        "First-time setup required.",
-        border_style="yellow",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold]Welcome to bullsh![/bold]\n\nFirst-time setup required.",
+            border_style="yellow",
+        )
+    )
 
     api_key = Prompt.ask(
-        "\n[bold]ANTHROPIC_API_KEY[/bold]\n"
-        "[dim]Get yours at https://console.anthropic.com/[/dim]"
+        "\n[bold]ANTHROPIC_API_KEY[/bold]\n[dim]Get yours at https://console.anthropic.com/[/dim]"
     )
 
     edgar_identity = Prompt.ask(
@@ -166,11 +169,13 @@ def research(
     ctx: typer.Context,
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., NVDA)")],
     framework: Annotated[
-        Optional[str],
-        typer.Option("--framework", "-f", help="Analysis framework (piotroski, porter, or custom:name)"),
+        str | None,
+        typer.Option(
+            "--framework", "-f", help="Analysis framework (piotroski, porter, or custom:name)"
+        ),
     ] = None,
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Save output to file"),
     ] = None,
     verbose: Annotated[
@@ -184,8 +189,9 @@ def research(
 ) -> None:
     """Research a single company."""
     import asyncio
+
     from bullsh.agent.orchestrator import Orchestrator
-    from bullsh.storage import get_session_manager, Session
+    from bullsh.storage import get_session_manager
 
     try:
         config = load_config()
@@ -196,7 +202,10 @@ def research(
     # Set up debug logging if enabled via --debug flag
     if ctx.obj and ctx.obj.get("debug"):
         from bullsh.logging import setup_logging
-        log_file = setup_logging(config.logs_dir, debug=True, debug_filter=ctx.obj.get("debug_filter"))
+
+        log_file = setup_logging(
+            config.logs_dir, debug=True, debug_filter=ctx.obj.get("debug_filter")
+        )
         console.print(f"[dim]Debug logging to: {log_file}[/dim]")
 
     ticker = ticker.upper()
@@ -218,9 +227,13 @@ def research(
     # Run initial research query
     initial_prompt = f"Research {ticker} for me."
     if framework == "piotroski":
-        initial_prompt += " Apply the Piotroski F-Score framework and calculate each of the 9 signals."
+        initial_prompt += (
+            " Apply the Piotroski F-Score framework and calculate each of the 9 signals."
+        )
     elif framework == "porter":
-        initial_prompt += " Apply Porter's Five Forces framework and analyze each competitive force."
+        initial_prompt += (
+            " Apply Porter's Five Forces framework and analyze each competitive force."
+        )
 
     async def run_research() -> str:
         """Run the research and collect output."""
@@ -255,6 +268,7 @@ def research(
     if interactive:
         console.print("\n[dim]Entering interactive mode. Type /exit to quit.[/dim]\n")
         from bullsh.ui.repl import run_repl_with_session
+
         run_repl_with_session(config, orchestrator, session, framework)
 
 
@@ -265,11 +279,11 @@ def compare(
         typer.Argument(help="Stock tickers to compare (max 3)"),
     ],
     framework: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--framework", "-f", help="Analysis framework"),
     ] = None,
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Save output to file"),
     ] = None,
     verbose: Annotated[
@@ -283,6 +297,7 @@ def compare(
 ) -> None:
     """Compare multiple companies (max 3)."""
     import asyncio
+
     from bullsh.agent.orchestrator import Orchestrator
     from bullsh.storage import get_session_manager
 
@@ -321,7 +336,9 @@ def compare(
     if framework == "piotroski":
         initial_prompt += "\n\nCalculate the Piotroski F-Score for each company and compare their financial health."
     elif framework == "porter":
-        initial_prompt += "\n\nAnalyze Porter's Five Forces for each company's industry positioning."
+        initial_prompt += (
+            "\n\nAnalyze Porter's Five Forces for each company's industry positioning."
+        )
 
     async def run_compare() -> str:
         """Run the comparison and collect output."""
@@ -356,6 +373,7 @@ def compare(
     if interactive:
         console.print("\n[dim]Entering interactive mode. Type /exit to quit.[/dim]\n")
         from bullsh.ui.repl import run_repl_with_session
+
         run_repl_with_session(config, orchestrator, session, framework)
 
 
@@ -363,7 +381,7 @@ def compare(
 def thesis(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol")],
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Save thesis to file"),
     ] = None,
     verbose: Annotated[
@@ -377,6 +395,7 @@ def thesis(
 ) -> None:
     """Generate a full investment thesis (Hedge Fund Pitch format)."""
     import asyncio
+
     from bullsh.agent.orchestrator import Orchestrator
     from bullsh.storage import get_session_manager
     from bullsh.tools import thesis as thesis_tool
@@ -466,6 +485,7 @@ Be specific with numbers and cite your sources. This should read like a professi
     if not output_path:
         # Auto-generate filename
         from datetime import datetime
+
         date_str = datetime.now().strftime("%Y%m%d")
         output_path = Path(f"{ticker}_thesis_{date_str}.md")
 
@@ -485,6 +505,7 @@ Be specific with numbers and cite your sources. This should read like a professi
     if interactive:
         console.print("\n[dim]Entering interactive mode. Type /exit to quit.[/dim]\n")
         from bullsh.ui.repl import run_repl_with_session
+
         run_repl_with_session(config, orchestrator, session, "pitch")
 
 
@@ -497,11 +518,11 @@ def debate(
         typer.Option("--deep", help="Two rebuttal rounds (more thorough, ~40K tokens)"),
     ] = False,
     framework: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--framework", "-f", help="Include framework context (piotroski, porter)"),
     ] = None,
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Export debate to file"),
     ] = None,
     interactive: Annotated[
@@ -511,6 +532,7 @@ def debate(
 ) -> None:
     """Run adversarial bull vs. bear debate on a stock."""
     import asyncio
+
     from bullsh.agent.debate import DebateCoordinator, DebateRefused
     from bullsh.storage import get_session_manager
 
@@ -523,7 +545,10 @@ def debate(
     # Set up debug logging if enabled
     if ctx.obj and ctx.obj.get("debug"):
         from bullsh.logging import setup_logging
-        log_file = setup_logging(config.logs_dir, debug=True, debug_filter=ctx.obj.get("debug_filter"))
+
+        log_file = setup_logging(
+            config.logs_dir, debug=True, debug_filter=ctx.obj.get("debug_filter")
+        )
         console.print(f"[dim]Debug logging to: {log_file}[/dim]")
 
     ticker = ticker.upper()
@@ -536,10 +561,15 @@ def debate(
     if framework:
         try:
             from bullsh.frameworks.base import load_framework
+
             fw = load_framework(framework)
-            framework_context = f"Framework: {fw.display_name}\nCriteria: {', '.join(c.name for c in fw.criteria)}"
+            framework_context = (
+                f"Framework: {fw.display_name}\nCriteria: {', '.join(c.name for c in fw.criteria)}"
+            )
         except ValueError:
-            console.print(f"[yellow]Warning: Framework '{framework}' not found, proceeding without it[/yellow]")
+            console.print(
+                f"[yellow]Warning: Framework '{framework}' not found, proceeding without it[/yellow]"
+            )
 
     # Create debate coordinator
     coordinator = DebateCoordinator(
@@ -606,6 +636,7 @@ def debate(
 
         # Add debate context to orchestrator history
         from bullsh.agent.orchestrator import AgentMessage
+
         orchestrator.history.append(AgentMessage(role="user", content=f"Debate {ticker}"))
         orchestrator.history.append(AgentMessage(role="assistant", content=result))
 
@@ -616,7 +647,7 @@ def debate(
 def summary(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol")],
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Save summary to file"),
     ] = None,
     verbose: Annotated[
@@ -626,6 +657,7 @@ def summary(
 ) -> None:
     """Quick summary of a company."""
     import asyncio
+
     from bullsh.agent.orchestrator import Orchestrator
 
     try:
@@ -734,6 +766,7 @@ def resume(
     orchestrator = Orchestrator(config, verbose=verbose)
     for msg in session.messages:
         from bullsh.agent.orchestrator import AgentMessage
+
         orchestrator.history.append(AgentMessage(role=msg.role, content=msg.content))
 
     # Wire session for artifact tracking
@@ -741,6 +774,7 @@ def resume(
 
     # Enter REPL
     from bullsh.ui.repl import run_repl_with_session
+
     run_repl_with_session(config, orchestrator, session, session.framework)
 
 
@@ -748,8 +782,9 @@ def resume(
 @frameworks_app.command("list")
 def frameworks_list() -> None:
     """List available analysis frameworks."""
-    from bullsh.frameworks.base import list_frameworks
     from rich.table import Table
+
+    from bullsh.frameworks.base import list_frameworks
 
     frameworks = list_frameworks()
 
@@ -771,7 +806,9 @@ def frameworks_list() -> None:
     console.print(table)
 
     if not any(not fw.get("builtin") for fw in frameworks):
-        console.print("\n[dim]No custom frameworks. Create one with: bullsh frameworks create[/dim]")
+        console.print(
+            "\n[dim]No custom frameworks. Create one with: bullsh frameworks create[/dim]"
+        )
 
 
 @frameworks_app.command("show")
@@ -779,8 +816,9 @@ def frameworks_show(
     name: Annotated[str, typer.Argument(help="Framework name")],
 ) -> None:
     """Show details of a framework."""
-    from bullsh.frameworks.base import load_framework
     from rich.table import Table
+
+    from bullsh.frameworks.base import load_framework
 
     try:
         fw = load_framework(name)
@@ -804,7 +842,9 @@ def frameworks_show(
     table.add_column("Source")
 
     for c in fw.criteria:
-        table.add_row(c.id, c.name, c.question[:50] + "..." if len(c.question) > 50 else c.question, c.source)
+        table.add_row(
+            c.id, c.name, c.question[:50] + "..." if len(c.question) > 50 else c.question, c.source
+        )
 
     console.print(table)
 
@@ -851,14 +891,18 @@ def frameworks_create() -> None:
             break
 
         criterion_question = Prompt.ask("Question to answer")
-        criterion_source = Prompt.ask("Data source", choices=["sec", "yahoo", "social", "synthesis"], default="sec")
+        criterion_source = Prompt.ask(
+            "Data source", choices=["sec", "yahoo", "social", "synthesis"], default="sec"
+        )
 
-        criteria.append({
-            "id": criterion_name.lower().replace(" ", "_"),
-            "name": criterion_name,
-            "question": criterion_question,
-            "source": criterion_source,
-        })
+        criteria.append(
+            {
+                "id": criterion_name.lower().replace(" ", "_"),
+                "name": criterion_name,
+                "question": criterion_question,
+                "source": criterion_source,
+            }
+        )
 
         console.print(f"[green]Added:[/green] {criterion_name}\n")
 
@@ -943,13 +987,17 @@ def frameworks_edit(
     if not editor:
         # Try common editors
         for e in ["code", "vim", "nano", "notepad"]:
-            if subprocess.run(["which", e] if sys.platform != "win32" else ["where", e],
-                            capture_output=True).returncode == 0:
+            if (
+                subprocess.run(
+                    ["which", e] if sys.platform != "win32" else ["where", e], capture_output=True
+                ).returncode
+                == 0
+            ):
                 editor = e
                 break
 
     if not editor:
-        console.print(f"[yellow]No editor found. Edit manually:[/yellow]")
+        console.print("[yellow]No editor found. Edit manually:[/yellow]")
         console.print(f"  {framework_path}")
         return
 

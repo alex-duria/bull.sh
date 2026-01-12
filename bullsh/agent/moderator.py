@@ -1,7 +1,6 @@
 """Moderator agent for debate synthesis."""
 
 from dataclasses import dataclass
-from typing import Any
 
 from anthropic import AsyncAnthropic
 
@@ -13,6 +12,7 @@ from bullsh.logging import log
 @dataclass
 class SynthesisResult:
     """Structured result from moderator synthesis."""
+
     contentions: list[str]  # 2-5 key points of disagreement
     conviction: int  # 1-10 scale
     conviction_direction: str  # "bull" or "bear"
@@ -46,7 +46,7 @@ class ModeratorAgent:
 
     @property
     def system_prompt(self) -> str:
-        return f"""You are a neutral moderator synthesizing a bull vs. bear debate on {self.ticker or 'a stock'}.
+        return f"""You are a neutral moderator synthesizing a bull vs. bear debate on {self.ticker or "a stock"}.
 
 You receive the opening arguments and rebuttals from both sides.
 You do NOT have access to raw data - judge based on arguments presented.
@@ -142,12 +142,10 @@ Synthesize this debate. Identify contentions, assess evidence, and provide your 
                 messages=[{"role": "user", "content": task}],
             )
 
-            text_content = "".join(
-                block.text for block in response.content if block.type == "text"
-            )
+            text_content = "".join(block.text for block in response.content if block.type == "text")
             tokens_used = response.usage.input_tokens + response.usage.output_tokens
 
-            log("agent", f"ModeratorAgent completed synthesis")
+            log("agent", "ModeratorAgent completed synthesis")
 
             return AgentResult(
                 content=text_content,

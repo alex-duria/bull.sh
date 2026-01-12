@@ -13,6 +13,7 @@ from bullsh.logging import log
 @dataclass
 class AgentResult:
     """Result from a subagent execution."""
+
     content: str
     tool_results: list[dict[str, Any]] = field(default_factory=list)
     ticker: str | None = None
@@ -98,8 +99,7 @@ class SubAgent(ABC):
     async def _execute_tool(self, name: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool and return the result."""
         # Import tools lazily
-        from bullsh.tools import sec, yahoo, social, news, rag
-        from bullsh.tools.base import ToolStatus
+        from bullsh.tools import news, rag, sec, social, yahoo
 
         try:
             match name:

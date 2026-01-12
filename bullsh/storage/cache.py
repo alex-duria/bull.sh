@@ -13,6 +13,7 @@ from bullsh.config import get_config
 @dataclass
 class CacheEntry:
     """A cached response with metadata."""
+
     key: str
     data: dict[str, Any]
     source: str  # Tool that produced this data
@@ -37,14 +38,14 @@ class CacheEntry:
 
 # Default TTLs by data source (in hours)
 DEFAULT_TTL: dict[str, int | None] = {
-    "sec": 24 * 7,      # SEC filings - 7 days (rarely change)
-    "yahoo": 1,         # Yahoo Finance - 1 hour (price/ratings change)
-    "stocktwits": 1,    # StockTwits - 1 hour (sentiment is time-sensitive)
-    "reddit": 2,        # Reddit - 2 hours
-    "news": 4,          # News - 4 hours
-    "price_history": 24,    # Price history - 1 day (EOD refresh)
+    "sec": 24 * 7,  # SEC filings - 7 days (rarely change)
+    "yahoo": 1,  # Yahoo Finance - 1 hour (price/ratings change)
+    "stocktwits": 1,  # StockTwits - 1 hour (sentiment is time-sensitive)
+    "reddit": 2,  # Reddit - 2 hours
+    "news": 4,  # News - 4 hours
+    "price_history": 24,  # Price history - 1 day (EOD refresh)
     "fama_french": 24 * 7,  # Fama-French factors - 7 days (monthly updates)
-    "default": 12,      # Default - 12 hours
+    "default": 12,  # Default - 12 hours
 }
 
 
@@ -67,10 +68,7 @@ class Cache:
             try:
                 with open(index_path) as f:
                     data = json.load(f)
-                    self._index = {
-                        k: CacheEntry.from_dict(v)
-                        for k, v in data.items()
-                    }
+                    self._index = {k: CacheEntry.from_dict(v) for k, v in data.items()}
             except (json.JSONDecodeError, KeyError):
                 self._index = {}
 
@@ -228,7 +226,8 @@ class Cache:
             Number of entries invalidated
         """
         to_remove = [
-            key for key, entry in self._index.items()
+            key
+            for key, entry in self._index.items()
             if entry.ticker and entry.ticker.upper() == ticker.upper()
         ]
 
@@ -253,10 +252,7 @@ class Cache:
         Returns:
             Number of entries invalidated
         """
-        to_remove = [
-            key for key, entry in self._index.items()
-            if entry.source == source
-        ]
+        to_remove = [key for key, entry in self._index.items() if entry.source == source]
 
         for key in to_remove:
             data_path = self._data_path(key)
@@ -327,15 +323,17 @@ class Cache:
             if ticker and entry.ticker != ticker.upper():
                 continue
 
-            entries.append({
-                "key": entry.key,
-                "source": entry.source,
-                "ticker": entry.ticker,
-                "created_at": entry.created_at,
-                "expires_at": entry.expires_at,
-                "expired": entry.is_expired(),
-                "hit_count": entry.hit_count,
-            })
+            entries.append(
+                {
+                    "key": entry.key,
+                    "source": entry.source,
+                    "ticker": entry.ticker,
+                    "created_at": entry.created_at,
+                    "expires_at": entry.expires_at,
+                    "expired": entry.is_expired(),
+                    "hit_count": entry.hit_count,
+                }
+            )
 
         return sorted(entries, key=lambda x: x["created_at"], reverse=True)
 

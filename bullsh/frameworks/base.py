@@ -1,25 +1,25 @@
 """Framework base class and loader."""
 
+import tomllib
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any
-
-import tomllib
 
 from bullsh.config import get_config
 
 
 class FrameworkType(Enum):
     """Type of analysis framework."""
+
     QUANTITATIVE = "quantitative"  # Score-based (Piotroski)
-    QUALITATIVE = "qualitative"    # Analysis-based (Porter)
-    OUTPUT = "output"              # Output format (Pitch)
+    QUALITATIVE = "qualitative"  # Analysis-based (Porter)
+    OUTPUT = "output"  # Output format (Pitch)
 
 
 @dataclass
 class Criterion:
     """A single criterion in a framework."""
+
     id: str
     name: str
     question: str
@@ -36,6 +36,7 @@ class Criterion:
 @dataclass
 class Framework:
     """An analysis framework."""
+
     name: str
     display_name: str
     description: str
@@ -102,7 +103,9 @@ class Framework:
 
     def to_checklist_display(self) -> str:
         """Format as checklist for display."""
-        lines = [f"**{self.display_name}** [{self.get_progress_bar()}] {self.get_progress()[0]}/{self.get_progress()[1]}\n"]
+        lines = [
+            f"**{self.display_name}** [{self.get_progress_bar()}] {self.get_progress()[0]}/{self.get_progress()[1]}\n"
+        ]
 
         for c in self.criteria:
             if c.checked:
@@ -363,7 +366,9 @@ def _load_custom_framework(name: str) -> Framework:
         name=f"custom:{name}",
         display_name=meta.get("name", name),
         description=meta.get("description", "Custom framework"),
-        framework_type=FrameworkType.QUANTITATIVE if scoring.get("enabled") else FrameworkType.QUALITATIVE,
+        framework_type=FrameworkType.QUANTITATIVE
+        if scoring.get("enabled")
+        else FrameworkType.QUALITATIVE,
         criteria=criteria,
         scoring_enabled=scoring.get("enabled", False),
         pass_threshold=scoring.get("pass_threshold"),
@@ -377,13 +382,15 @@ def list_frameworks() -> list[dict[str, str]]:
 
     # Built-in
     for name, fw in BUILTIN_FRAMEWORKS.items():
-        frameworks.append({
-            "name": name,
-            "display_name": fw.display_name,
-            "description": fw.description,
-            "type": fw.framework_type.value,
-            "builtin": True,
-        })
+        frameworks.append(
+            {
+                "name": name,
+                "display_name": fw.display_name,
+                "description": fw.description,
+                "type": fw.framework_type.value,
+                "builtin": True,
+            }
+        )
 
     # Custom
     config = get_config()
@@ -391,13 +398,15 @@ def list_frameworks() -> list[dict[str, str]]:
         for path in config.custom_frameworks_dir.glob("*.toml"):
             try:
                 fw = _load_custom_framework(path.stem)
-                frameworks.append({
-                    "name": f"custom:{path.stem}",
-                    "display_name": fw.display_name,
-                    "description": fw.description,
-                    "type": fw.framework_type.value,
-                    "builtin": False,
-                })
+                frameworks.append(
+                    {
+                        "name": f"custom:{path.stem}",
+                        "display_name": fw.display_name,
+                        "description": fw.description,
+                        "type": fw.framework_type.value,
+                        "builtin": False,
+                    }
+                )
             except Exception:
                 pass  # Skip invalid frameworks
 

@@ -9,14 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
-from openpyxl.chart import BarChart, PieChart, LineChart, Reference
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.chart import BarChart, LineChart, PieChart, Reference
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from bullsh.config import get_config
-from bullsh.factors.session import FactorState
 from bullsh.factors.scenarios import SCENARIOS
-
+from bullsh.factors.session import FactorState
 
 # Styling constants (matching tools/excel.py)
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -132,7 +131,10 @@ def _create_executive_summary(wb: Workbook, state: FactorState, data: dict[str, 
         ("Industry", yahoo_data.get("industry", "N/A")),
         ("Market Cap", _format_market_cap(yahoo_data.get("market_cap"))),
         ("Price", f"${yahoo_data.get('price', 0):.2f}"),
-        ("52W Range", f"${yahoo_data.get('52w_low', 0):.2f} - ${yahoo_data.get('52w_high', 0):.2f}"),
+        (
+            "52W Range",
+            f"${yahoo_data.get('52w_low', 0):.2f} - ${yahoo_data.get('52w_high', 0):.2f}",
+        ),
     ]
 
     for i, (label, value) in enumerate(info):
@@ -238,7 +240,7 @@ def _create_factor_exposures(wb: Workbook, state: FactorState, data: dict[str, A
 
         # Get factor score from profile if available
         factor_score = None
-        if primary_profile and hasattr(primary_profile, 'scores'):
+        if primary_profile and hasattr(primary_profile, "scores"):
             factor_score = primary_profile.scores.get(factor)
 
         if factor_score:
@@ -248,7 +250,7 @@ def _create_factor_exposures(wb: Workbook, state: FactorState, data: dict[str, A
                     # Calculate peer median for this component
                     peer_values = []
                     for peer_ticker, peer_profile in profiles.items():
-                        if peer_ticker != ticker and hasattr(peer_profile, 'scores'):
+                        if peer_ticker != ticker and hasattr(peer_profile, "scores"):
                             peer_score = peer_profile.scores.get(factor)
                             if peer_score and peer_score.components.get(component_name) is not None:
                                 peer_values.append(peer_score.components[component_name])
@@ -341,7 +343,11 @@ def _create_peer_comparison(wb: Workbook, state: FactorState, data: dict[str, An
     yahoo_data = data.get("yahoo_data", {})
 
     # Headers
-    headers = ["Ticker", "Price", "Market Cap"] + [f.title() for f in state.selected_factors] + ["Composite", "Rank"]
+    headers = (
+        ["Ticker", "Price", "Market Cap"]
+        + [f.title() for f in state.selected_factors]
+        + ["Composite", "Rank"]
+    )
     for col, header in enumerate(headers, 1):
         ws.cell(row=3, column=col, value=header)
     _style_header_row(ws, 3, len(headers))
@@ -355,7 +361,9 @@ def _create_peer_comparison(wb: Workbook, state: FactorState, data: dict[str, An
         factor_scores = state.factor_scores.get(ticker, {})
 
         # Calculate composite
-        composite = sum(factor_scores.get(f, 0) * state.weights.get(f, 0) for f in state.selected_factors)
+        composite = sum(
+            factor_scores.get(f, 0) * state.weights.get(f, 0) for f in state.selected_factors
+        )
         composite_scores.append((ticker, composite))
 
         ws.cell(row=row, column=1, value=ticker)
@@ -424,8 +432,12 @@ def _create_risk_decomposition(wb: Workbook, state: FactorState, data: dict[str,
         chart = PieChart()
         chart.title = "Risk Attribution"
 
-        data_ref = Reference(ws, min_col=2, min_row=4, max_row=4 + len(state.variance_decomposition))
-        cats_ref = Reference(ws, min_col=1, min_row=5, max_row=4 + len(state.variance_decomposition))
+        data_ref = Reference(
+            ws, min_col=2, min_row=4, max_row=4 + len(state.variance_decomposition)
+        )
+        cats_ref = Reference(
+            ws, min_col=1, min_row=5, max_row=4 + len(state.variance_decomposition)
+        )
         chart.add_data(data_ref, titles_from_data=True)
         chart.set_categories(cats_ref)
         chart.width = 10
@@ -547,7 +559,11 @@ def _create_historical_exposures(wb: Workbook, state: FactorState, data: dict[st
             ws.cell(row=summary_row, column=2, value=round(statistics.mean(betas), 3))
             ws.cell(row=summary_row, column=3, value=round(min(betas), 3))
             ws.cell(row=summary_row, column=4, value=round(max(betas), 3))
-            ws.cell(row=summary_row, column=5, value=round(statistics.stdev(betas), 3) if len(betas) > 1 else 0)
+            ws.cell(
+                row=summary_row,
+                column=5,
+                value=round(statistics.stdev(betas), 3) if len(betas) > 1 else 0,
+            )
             summary_row += 1
 
     _auto_width(ws)

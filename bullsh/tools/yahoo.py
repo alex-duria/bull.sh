@@ -3,13 +3,14 @@
 import asyncio
 from typing import Any
 
+from bullsh.logging import log, log_cache_hit, log_cache_miss
 from bullsh.storage.cache import get_cache
 from bullsh.tools.base import ToolResult, ToolStatus
-from bullsh.logging import log, log_cache_hit, log_cache_miss
 
 # yfinance is more reliable than scraping
 try:
     import yfinance as yf
+
     YFINANCE_AVAILABLE = True
 except ImportError:
     YFINANCE_AVAILABLE = False
@@ -79,12 +80,16 @@ async def scrape_yahoo(ticker: str) -> ToolResult:
         log("tools", f"scrape_yahoo: Got {filled}/{len(key_fields)} key fields for {ticker}")
 
         # Cache successful results
-        cache.set("yahoo", ticker, {
-            "data": data,
-            "confidence": confidence,
-            "status": "success",
-            "source_url": f"https://finance.yahoo.com/quote/{ticker}",
-        })
+        cache.set(
+            "yahoo",
+            ticker,
+            {
+                "data": data,
+                "confidence": confidence,
+                "status": "success",
+                "source_url": f"https://finance.yahoo.com/quote/{ticker}",
+            },
+        )
 
         return ToolResult(
             data=data,
@@ -115,7 +120,10 @@ def _fetch_yahoo_sync(ticker: str) -> dict[str, Any]:
         # yfinance 0.2.x changed how info works - try fast_info first
         try:
             fast = stock.fast_info
-            log("tools", f"scrape_yahoo: fast_info available, price={getattr(fast, 'last_price', None)}")
+            log(
+                "tools",
+                f"scrape_yahoo: fast_info available, price={getattr(fast, 'last_price', None)}",
+            )
         except Exception as e:
             log("tools", f"scrape_yahoo: fast_info failed: {e}", level="warning")
             fast = None
@@ -124,12 +132,18 @@ def _fetch_yahoo_sync(ticker: str) -> dict[str, Any]:
         log("tools", f"scrape_yahoo: yfinance returned {len(info) if info else 0} fields")
 
         if not info:
-            log("tools", f"scrape_yahoo: yfinance returned empty info for {ticker}", level="warning")
+            log(
+                "tools", f"scrape_yahoo: yfinance returned empty info for {ticker}", level="warning"
+            )
             return {}
 
         # Check for common error indicators
         if info.get("regularMarketPrice") is None and info.get("currentPrice") is None:
-            log("tools", f"scrape_yahoo: No price data for {ticker}. Keys: {list(info.keys())[:10]}", level="warning")
+            log(
+                "tools",
+                f"scrape_yahoo: No price data for {ticker}. Keys: {list(info.keys())[:10]}",
+                level="warning",
+            )
             # Try to return what we have anyway
             if not any(info.get(k) for k in ["marketCap", "sector", "industry"]):
                 return {}
@@ -138,7 +152,7 @@ def _fetch_yahoo_sync(ticker: str) -> dict[str, Any]:
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         if not price and fast:
             try:
-                price = getattr(fast, 'last_price', None) or getattr(fast, 'previous_close', None)
+                price = getattr(fast, "last_price", None) or getattr(fast, "previous_close", None)
                 log("tools", f"scrape_yahoo: Using fast_info price: {price}")
             except Exception:
                 pass
@@ -147,21 +161,24 @@ def _fetch_yahoo_sync(ticker: str) -> dict[str, Any]:
         market_cap = info.get("marketCap")
         if not market_cap and fast:
             try:
-                market_cap = getattr(fast, 'market_cap', None)
+                market_cap = getattr(fast, "market_cap", None)
             except Exception:
                 pass
 
         return {
             "ticker": ticker,
             "price": price,
-            "previous_close": info.get("previousClose") or (getattr(fast, 'previous_close', None) if fast else None),
+            "previous_close": info.get("previousClose")
+            or (getattr(fast, "previous_close", None) if fast else None),
             "change": info.get("regularMarketChange"),
             "change_percent": info.get("regularMarketChangePercent"),
             "pe_ratio": info.get("trailingPE"),
             "forward_pe": info.get("forwardPE"),
             "eps": info.get("trailingEps"),
-            "52w_high": info.get("fiftyTwoWeekHigh") or (getattr(fast, 'year_high', None) if fast else None),
-            "52w_low": info.get("fiftyTwoWeekLow") or (getattr(fast, 'year_low', None) if fast else None),
+            "52w_high": info.get("fiftyTwoWeekHigh")
+            or (getattr(fast, "year_high", None) if fast else None),
+            "52w_low": info.get("fiftyTwoWeekLow")
+            or (getattr(fast, "year_low", None) if fast else None),
             "market_cap": market_cap,
             "volume": info.get("volume"),
             "avg_volume": info.get("averageVolume"),

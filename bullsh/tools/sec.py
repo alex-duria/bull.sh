@@ -4,13 +4,12 @@ import asyncio
 import contextlib
 import io
 import sys
-from datetime import datetime
 from typing import Any
 
 from bullsh.config import get_config
+from bullsh.logging import log, log_cache_hit, log_cache_miss
 from bullsh.storage.cache import get_cache
 from bullsh.tools.base import ToolResult, ToolStatus
-from bullsh.logging import log, log_cache_hit, log_cache_miss
 
 # Flag to control RAG auto-indexing
 _rag_enabled = True
@@ -18,6 +17,7 @@ _rag_enabled = True
 # edgartools imports - these will fail if not installed
 try:
     from edgar import Company, set_identity
+
     EDGAR_AVAILABLE = True
 except ImportError:
     EDGAR_AVAILABLE = False
@@ -41,9 +41,7 @@ def _suppress_stdout():
 def _ensure_edgar() -> None:
     """Ensure edgartools is available and identity is set."""
     if not EDGAR_AVAILABLE:
-        raise RuntimeError(
-            "edgartools not installed. Run: pip install edgartools"
-        )
+        raise RuntimeError("edgartools not installed. Run: pip install edgartools")
 
     config = get_config()
     set_identity(config.edgar_identity)
@@ -97,12 +95,17 @@ async def sec_search(ticker: str, fuzzy: bool = True) -> ToolResult:
 
         # Cache successful results
         if result.status == ToolStatus.SUCCESS:
-            cache.set("sec", ticker, {
-                "data": result.data,
-                "confidence": result.confidence,
-                "status": result.status.value,
-                "source_url": result.source_url,
-            }, action="search")
+            cache.set(
+                "sec",
+                ticker,
+                {
+                    "data": result.data,
+                    "confidence": result.confidence,
+                    "status": result.status.value,
+                    "source_url": result.source_url,
+                },
+                action="search",
+            )
 
         return result
     except Exception as e:
@@ -120,7 +123,7 @@ def _sec_search_sync(ticker: str, fuzzy: bool) -> ToolResult:
     """Synchronous SEC search."""
     try:
         company = Company(ticker)
-    except Exception as e:
+    except Exception:
         if fuzzy:
             # TODO: Implement fuzzy search by company name
             pass
@@ -241,12 +244,18 @@ async def sec_fetch(
         if result.status in (ToolStatus.SUCCESS, ToolStatus.PARTIAL):
             # Don't cache full_text - it's huge and only needed for RAG indexing
             cache_data = {k: v for k, v in result.data.items() if k != "full_text"}
-            cache.set("sec", ticker, {
-                "data": cache_data,
-                "confidence": result.confidence,
-                "status": result.status.value,
-                "source_url": result.source_url,
-            }, action="fetch", **cache_params)
+            cache.set(
+                "sec",
+                ticker,
+                {
+                    "data": cache_data,
+                    "confidence": result.confidence,
+                    "status": result.status.value,
+                    "source_url": result.source_url,
+                },
+                action="fetch",
+                **cache_params,
+            )
 
             # Auto-index into vector database for RAG (uses full_text)
             if _rag_enabled and ("full_text" in result.data or "text" in result.data):
@@ -312,7 +321,7 @@ def _sec_fetch_sync(
                     error_message=f"No {filing_type} found for {ticker}",
                 )
             # latest() returns a Filings object, get first
-            if hasattr(filing, '__iter__'):
+            if hasattr(filing, "__iter__"):
                 filing = list(filing)[0]
 
         log("tools", f"sec_fetch: Found filing dated {filing.filing_date}")
@@ -330,20 +339,20 @@ def _sec_fetch_sync(
 
     # Extract text using filing.text() - simple approach like tenk
     try:
-        log("tools", f"sec_fetch: Extracting text via filing.text()")
+        log("tools", "sec_fetch: Extracting text via filing.text()")
 
         with _suppress_stdout():
             # Use .text() method directly - this is what tenk does
             # It handles all the HTML/XML parsing internally
-            if hasattr(filing, 'text'):
+            if hasattr(filing, "text"):
                 if callable(filing.text):
                     full_text = filing.text()
                 else:
                     full_text = filing.text
             else:
                 # Fallback: try to get document object
-                doc = filing.obj() if hasattr(filing, 'obj') else filing
-                if hasattr(doc, 'text'):
+                doc = filing.obj() if hasattr(filing, "obj") else filing
+                if hasattr(doc, "text"):
                     full_text = doc.text() if callable(doc.text) else doc.text
                 else:
                     full_text = str(doc)
@@ -351,7 +360,7 @@ def _sec_fetch_sync(
         log("tools", f"sec_fetch: Got {len(full_text)} chars of text")
 
         # Build URL for citations
-        filing_url = getattr(filing, 'url', None)
+        filing_url = getattr(filing, "url", None)
         if not filing_url:
             filing_url = f"https://www.sec.gov/Archives/edgar/data/{company.cik}/{filing.accession_number.replace('-', '')}"
 
@@ -366,7 +375,10 @@ def _sec_fetch_sync(
             "full_length": len(full_text),
         }
 
-        log("tools", f"sec_fetch: Success - {len(full_text)} chars, truncated to {min(len(full_text), max_chars)}")
+        log(
+            "tools",
+            f"sec_fetch: Success - {len(full_text)} chars, truncated to {min(len(full_text), max_chars)}",
+        )
 
         return ToolResult(
             data=result_data,
@@ -423,7 +435,10 @@ async def _auto_index_for_rag(data: dict[str, Any], ticker: str, filing_type: st
         )
 
         if result.status == ToolStatus.SUCCESS:
-            log("tools", f"Auto-indexed {ticker} {filing_type} {year} for RAG ({result.data.get('chunks', 0)} chunks)")
+            log(
+                "tools",
+                f"Auto-indexed {ticker} {filing_type} {year} for RAG ({result.data.get('chunks', 0)} chunks)",
+            )
         elif result.status == ToolStatus.CACHED:
             log("tools", f"Filing {ticker} {filing_type} {year} already indexed for RAG")
 

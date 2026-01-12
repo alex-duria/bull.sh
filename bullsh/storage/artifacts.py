@@ -4,7 +4,7 @@ Solves the problem of the agent "forgetting" it already generated files.
 Artifacts are stored in Session.metadata and injected into the system prompt.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +15,7 @@ from bullsh.tools.base import ToolResult, ToolStatus
 @dataclass
 class Artifact:
     """A generated file artifact."""
+
     path: str
     filename: str
     artifact_type: str  # "excel", "thesis", "factor_excel"
@@ -38,7 +39,9 @@ class Artifact:
         """Format for system prompt injection."""
         ticker_str = ", ".join(self.tickers) if self.tickers else "N/A"
         sheets = self.metadata.get("sheets", [])
-        sheets_str = f" ({', '.join(sheets[:3])}{'...' if len(sheets) > 3 else ''})" if sheets else ""
+        sheets_str = (
+            f" ({', '.join(sheets[:3])}{'...' if len(sheets) > 3 else ''})" if sheets else ""
+        )
 
         return f"- {self.artifact_type.upper()}: {self.filename}{sheets_str}\n  Tickers: {ticker_str}\n  Path: {self.path}"
 

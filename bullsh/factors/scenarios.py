@@ -4,12 +4,12 @@ All calculations are pure Python - no LLM calls needed.
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
 class Scenario:
     """A market scenario with expected factor returns."""
+
     name: str
     display_name: str
     description: str
@@ -25,11 +25,11 @@ SCENARIOS: dict[str, Scenario] = {
         display_name="Rate Shock (+100bps)",
         description="Interest rates rise 100 basis points. Value outperforms as growth discounting increases. Momentum reverses on rate-sensitive names.",
         factor_returns={
-            "value": 0.03,       # Value stocks benefit
-            "momentum": -0.02,   # Momentum reverses
-            "quality": 0.01,     # Quality modest benefit
-            "growth": -0.05,     # Growth hurt by higher discount rates
-            "size": 0.0,         # Neutral
+            "value": 0.03,  # Value stocks benefit
+            "momentum": -0.02,  # Momentum reverses
+            "quality": 0.01,  # Quality modest benefit
+            "growth": -0.05,  # Growth hurt by higher discount rates
+            "size": 0.0,  # Neutral
             "volatility": 0.02,  # Vol increases
         },
     ),
@@ -38,11 +38,11 @@ SCENARIOS: dict[str, Scenario] = {
         display_name="Risk-Off / Flight to Quality",
         description="Market stress drives capital to defensive positions. Quality and low-volatility outperform. Momentum crashes as crowded trades unwind.",
         factor_returns={
-            "value": -0.02,      # Value underperforms
-            "momentum": -0.08,   # Momentum crashes
-            "quality": 0.04,     # Flight to quality
-            "growth": -0.03,     # Growth sells off
-            "size": -0.01,       # Small caps hurt
+            "value": -0.02,  # Value underperforms
+            "momentum": -0.08,  # Momentum crashes
+            "quality": 0.04,  # Flight to quality
+            "growth": -0.03,  # Growth sells off
+            "size": -0.01,  # Small caps hurt
             "volatility": 0.05,  # High vol names spike
         },
     ),
@@ -51,11 +51,11 @@ SCENARIOS: dict[str, Scenario] = {
         display_name="Economic Recession",
         description="Broad economic contraction. Earnings fall across sectors. Quality and defensive positioning dominate.",
         factor_returns={
-            "value": -0.04,      # Value traps emerge
-            "momentum": -0.03,   # Momentum struggles
-            "quality": 0.03,     # Quality resilience
-            "growth": -0.06,     # Growth expectations cut
-            "size": -0.02,       # Small caps vulnerable
+            "value": -0.04,  # Value traps emerge
+            "momentum": -0.03,  # Momentum struggles
+            "quality": 0.03,  # Quality resilience
+            "growth": -0.06,  # Growth expectations cut
+            "size": -0.02,  # Small caps vulnerable
             "volatility": 0.04,  # Vol premium expands
         },
     ),
@@ -64,11 +64,11 @@ SCENARIOS: dict[str, Scenario] = {
         display_name="Cyclical Rotation",
         description="Economic optimism drives rotation into cyclicals. Value and momentum align as beaten-down sectors rally.",
         factor_returns={
-            "value": 0.02,       # Value rally
-            "momentum": 0.03,    # Momentum benefits
-            "quality": -0.01,    # Quality lags
-            "growth": 0.02,      # Growth participates
-            "size": 0.01,        # Small caps benefit
+            "value": 0.02,  # Value rally
+            "momentum": 0.03,  # Momentum benefits
+            "quality": -0.01,  # Quality lags
+            "growth": 0.02,  # Growth participates
+            "size": 0.01,  # Small caps benefit
             "volatility": 0.01,  # Vol compresses slightly
         },
     ),
@@ -139,6 +139,7 @@ def calculate_scenario_contribution(
 @dataclass
 class CustomScenario:
     """User-defined custom scenario."""
+
     name: str
     factor_returns: dict[str, float]
     narrative: str  # User's description of the scenario
@@ -225,11 +226,7 @@ def identify_risk_scenarios(
     """
     returns = calculate_all_scenario_returns(factor_exposures)
 
-    risks = [
-        (name, ret)
-        for name, ret in returns.items()
-        if ret < threshold
-    ]
+    risks = [(name, ret) for name, ret in returns.items() if ret < threshold]
 
     return sorted(risks, key=lambda x: x[1])
 
@@ -245,10 +242,6 @@ def identify_opportunity_scenarios(
     """
     returns = calculate_all_scenario_returns(factor_exposures)
 
-    opportunities = [
-        (name, ret)
-        for name, ret in returns.items()
-        if ret > threshold
-    ]
+    opportunities = [(name, ret) for name, ret in returns.items() if ret > threshold]
 
     return sorted(opportunities, key=lambda x: x[1], reverse=True)

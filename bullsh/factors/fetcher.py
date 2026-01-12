@@ -12,20 +12,22 @@ from typing import Any
 
 import pandas as pd
 
+from bullsh.logging import log, log_cache_hit, log_cache_miss
 from bullsh.storage.cache import get_cache
 from bullsh.tools.base import ToolResult, ToolStatus
-from bullsh.logging import log, log_cache_hit, log_cache_miss
 
 # yfinance for price history
 try:
     import yfinance as yf
+
     YFINANCE_AVAILABLE = True
 except ImportError:
     YFINANCE_AVAILABLE = False
 
 # For HTTP requests
 try:
-    import httpx
+    import httpx  # noqa: F401 - used conditionally below
+
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
@@ -154,30 +156,15 @@ def _fetch_price_history_sync(ticker: str, period: str) -> dict[str, Any]:
 
     # Convert to serializable format
     # Dates as ISO strings, prices as floats
-    closes = [
-        (dt.strftime("%Y-%m-%d"), float(row["Close"]))
-        for dt, row in hist.iterrows()
-    ]
+    closes = [(dt.strftime("%Y-%m-%d"), float(row["Close"])) for dt, row in hist.iterrows()]
 
-    opens = [
-        (dt.strftime("%Y-%m-%d"), float(row["Open"]))
-        for dt, row in hist.iterrows()
-    ]
+    opens = [(dt.strftime("%Y-%m-%d"), float(row["Open"])) for dt, row in hist.iterrows()]
 
-    highs = [
-        (dt.strftime("%Y-%m-%d"), float(row["High"]))
-        for dt, row in hist.iterrows()
-    ]
+    highs = [(dt.strftime("%Y-%m-%d"), float(row["High"])) for dt, row in hist.iterrows()]
 
-    lows = [
-        (dt.strftime("%Y-%m-%d"), float(row["Low"]))
-        for dt, row in hist.iterrows()
-    ]
+    lows = [(dt.strftime("%Y-%m-%d"), float(row["Low"])) for dt, row in hist.iterrows()]
 
-    volumes = [
-        (dt.strftime("%Y-%m-%d"), int(row["Volume"]))
-        for dt, row in hist.iterrows()
-    ]
+    volumes = [(dt.strftime("%Y-%m-%d"), int(row["Volume"])) for dt, row in hist.iterrows()]
 
     # Calculate daily returns
     hist["Return"] = hist["Close"].pct_change()
@@ -408,7 +395,7 @@ async def fetch_all_factor_data(
     # Unpack results
     n_tickers = len(all_tickers)
     yahoo_results = all_results[:n_tickers]
-    history_results = all_results[n_tickers:2 * n_tickers]
+    history_results = all_results[n_tickers : 2 * n_tickers]
     benchmark_result = all_results[2 * n_tickers]
     ff_result = all_results[2 * n_tickers + 1]
 
@@ -418,7 +405,11 @@ async def fetch_all_factor_data(
         if isinstance(result, ToolResult) and result.status == ToolStatus.SUCCESS:
             yahoo_data[ticker] = result.data
         elif isinstance(result, Exception):
-            log("tools", f"fetch_all_factor_data: Yahoo error for {ticker}: {result}", level="warning")
+            log(
+                "tools",
+                f"fetch_all_factor_data: Yahoo error for {ticker}: {result}",
+                level="warning",
+            )
             yahoo_data[ticker] = {}
         else:
             yahoo_data[ticker] = {}
@@ -428,7 +419,11 @@ async def fetch_all_factor_data(
         if isinstance(result, ToolResult) and result.status == ToolStatus.SUCCESS:
             price_history[ticker] = result.data
         elif isinstance(result, Exception):
-            log("tools", f"fetch_all_factor_data: History error for {ticker}: {result}", level="warning")
+            log(
+                "tools",
+                f"fetch_all_factor_data: History error for {ticker}: {result}",
+                level="warning",
+            )
             price_history[ticker] = {}
         else:
             price_history[ticker] = {}
