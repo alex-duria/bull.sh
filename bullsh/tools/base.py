@@ -480,6 +480,29 @@ Requires FINANCIAL_DATASETS_API_KEY to be configured.""",
     },
 )
 
+GET_CONGRESS_TRADES_TOOL = ToolDefinition(
+    name="get_congress_trades",
+    description="""Get recent U.S. congressional trades (STOCK Act disclosures) via Tengu FIRM.
+
+Shows what members of Congress have recently bought and sold, a widely-watched "smart money"
+signal. Optionally filter by ticker. Useful for bull/bear theses and unusual-activity checks.
+
+Requires TENGU_API_KEY to be configured (free key: https://tengu.co/api).""",
+    parameters={
+        "properties": {
+            "ticker": {
+                "type": "string",
+                "description": "Optional: filter to a specific ticker (e.g., NVDA)",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum disclosures to return (default: 50)",
+            },
+        },
+        "required": [],
+    },
+)
+
 # All available tools
 ALL_TOOLS = [
     SEC_SEARCH_TOOL,
@@ -498,6 +521,7 @@ ALL_TOOLS = [
     SAVE_THESIS_TOOL,
     GET_FINANCIALS_TOOL,
     GET_INSIDER_TRANSACTIONS_TOOL,
+    GET_CONGRESS_TRADES_TOOL,
 ]
 
 

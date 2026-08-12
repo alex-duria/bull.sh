@@ -490,6 +490,13 @@ class Orchestrator:
                     params["ticker"],
                     params.get("limit", 50),
                 )
+            case "get_congress_trades":
+                from bullsh.tools import tengu
+
+                return await tengu.get_congress_trades(
+                    params.get("ticker"),
+                    params.get("limit", 50),
+                )
             case _:
                 return ToolResult(
                     data={},
